@@ -1,0 +1,32 @@
+Vector FMA contraction: assembly evidence
+icpx -O3 -march=native -std=c++17, Xeon Gold 6538Y+ (mimic)
+Source: src/AVX-512/fp_contract_test.cpp
+
+
+// all in zmm = 512 bit register. all vector.
+
+
+############ -ffp-contract=off ############
+--- mul_then_add --- (vmulps + vaddps)
+	vmulps	%zmm1, %zmm0, %zmm0
+	vaddps	%zmm2, %zmm0, %zmm0
+
+--- explicit_fma ---
+	vfmadd213ps	%zmm2, %zmm1, %zmm0     # zmm0 = (zmm1 * zmm0) + zmm2
+
+--- mul_then_add_ph --- (vmulph + vaddph)
+	vmulph	%zmm1, %zmm0, %zmm0
+	vaddph	%zmm2, %zmm0, %zmm0
+
+############ -ffp-contract=fast ############
+--- mul_then_add --- (vmulps + vaddps)
+	vfmadd213ps	%zmm2, %zmm1, %zmm0     # zmm0 = (zmm1 * zmm0) + zmm2
+	
+--- explicit_fma ---
+	vfmadd213ps	%zmm2, %zmm1, %zmm0     # zmm0 = (zmm1 * zmm0) + zmm2
+	
+--- mul_then_add_ph --- (vmulph + vaddph)
+	vfmadd213ph	%zmm2, %zmm1, %zmm0
+
+
+

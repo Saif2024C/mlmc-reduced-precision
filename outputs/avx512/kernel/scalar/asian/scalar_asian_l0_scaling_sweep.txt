@@ -1,0 +1,27 @@
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes a running minimum
+   and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 128 (OpenMP build)
+  reps    = 5 per timing
+
+OpenMP scaling at the driver's own level-0 sample counts
+(scalar Asian; 32 threads = one full socket of physical
+ cores on mimic -- no hyperthreading, no NUMA crossing)
+median of 5 independent trials, 5 reps each, interleaved
+
+  Wall clock (ms):
+    eps       N_0 | fp32 1thr  fp32 32t | fp16 1thr  fp16 32t | ratio32
+  0.100      9939 |    0.3156    0.0175 |    0.1550    0.0132 |  1.33x
+  0.050     39576 |    1.0079    0.0388 |    0.4988    0.0227 |  1.71x
+  0.020    261431 |    3.3459    0.1113 |    1.5935    0.0605 |  1.84x
+  0.010   1083098 |   12.5079    0.3955 |    6.1161    0.2203 |  1.80x
+  0.005   4346538 |   50.2311    4.3447 |   24.5944    1.9359 |  2.24x
+
+  Times in ms.  ratio32 = fp32/fp16 wall clock at 32
+  threads; compare it with the serial ratio to see whether
+  threading erodes the fp16 advantage.
+  The smallest N_0 runs for well under a millisecond at 32
+  threads, where thread-startup overhead is a large fraction
+  of the measurement.  Quote eps <= 0.02.

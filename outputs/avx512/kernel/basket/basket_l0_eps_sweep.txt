@@ -1,0 +1,28 @@
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 9 per timing
+
+Level-0 sample counts N_0 as requested by the MLMC driver
+(basket European, from the complexity table's N_l column)
+
+    eps       N_0 |  fp32(ms)  ns/path     Mp/s |  fp16(ms)  ns/path     Mp/s |  ratio
+  0.200      9704 |    0.7659    78.86    12.68 |    0.3259    33.55    29.81 |  2.35x
+  0.100     44758 |    2.6103    58.31    17.15 |    1.0067    22.49    44.47 |  2.59x
+  0.050    173030 |    6.0917    35.20    28.41 |    2.3211    13.41    74.55 |  2.62x
+  0.020   1169929 |   33.6898    28.80    34.73 |   14.2899    12.21    81.87 |  2.36x
+  0.010   4658857 |  134.2434    28.81    34.70 |   56.9429    12.22    81.82 |  2.36x
+
+  Correctness check (chk = mean discounted payoff):
+    eps       N_0 |    fp32 chk    fp16 chk       gap
+  0.200      9704 |   11.028137   11.202890  1.75e-01
+  0.100     44758 |   10.922562   11.060317  1.38e-01
+  0.050    173030 |   10.957273   10.984911  2.76e-02
+  0.020   1169929 |   10.970104   10.970738  6.34e-04
+  0.010   4658857 |   10.956032   10.949252  6.78e-03
+
+  ns/p = nanoseconds per path.  A flat ns/p column means the
+  kernel's efficiency is size-independent; a rising one means
+  something degrades as the trip count grows.  The two smallest
+  N_0 inflate ns/p in BOTH kernels -- per-call overhead not yet
+  amortised -- so quote eps <= 0.02 for the steady-state cost.

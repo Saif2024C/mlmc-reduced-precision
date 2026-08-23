@@ -1,0 +1,91 @@
+norminv_fp16 asymmetry -- root cause, 2026-08-03
+host: mimic.maths.ox.ac.uk  date: Mon  3 Aug 00:53:50 BST 2026
+
+### scalar (normal_dyadic2, normal_test.cpp) vs AVX-512 (norminv_fp16, my_mm512.h)
+(a) trace through the fold at the boundary pair
+    i=32766  m=0  folded=32766  x=256.000000  j=31  con1=0.0000000 con2=0.0000000  -> +0.000000
+    i=32767  m=0  folded=32767  x=256.000000  j=31  con1=0.0000000 con2=0.0000000  -> +0.000000
+    i=32768  m=1  folded=32767  x=256.000000  j=31  con1=0.0000000 con2=0.0000000  -> -0.000000
+    i=32769  m=1  folded=32766  x=256.000000  j=31  con1=0.0000000 con2=0.0000000  -> -0.000000
+
+(b) scalar normal_dyadic2: pairwise symmetry, all 32768 pairs
+    asymmetric pairs: 0 of 32768
+
+(c) do scalar and AVX-512 agree on every input?
+    i= 2055 scalar=-1.856445 avx=-1.857422
+    i= 2059 scalar=-1.855469 avx=-1.856445
+    i= 2071 scalar=-1.853516 avx=-1.854492
+    i= 2075 scalar=-1.852539 avx=-1.853516
+    i= 2091 scalar=-1.849609 avx=-1.850586
+    mismatches: 22553 of 65536
+
+### one-character probe: cmplt -> cmple on the fold predicate
+Pairwise symmetry, 32768 pairs:
+
+  as shipped (cmplt, strict)   asymmetric pairs: 1 of 32768   worst +3.519e-04 at i=32767
+  probe (cmple, non-strict)    asymmetric pairs: 0 of 32768
+
+Boundary values:
+  i               shipped   non-strict         true
+  32766          0.000352     0.000352    -0.000057
+  32767          0.000352     0.000352    -0.000019
+  32768          0.000000    -0.000352     0.000019
+  32769         -0.000352    -0.000352     0.000057
+
+=> confirmed: the strict comparison is the sole cause; pairs cancel with cmple
+
+Error at i=32768:  shipped 1.912e-05   non-strict 3.710e-04   (true +0.000019)
+
+### does it reach the estimators?
+1. raw 16-bit lanes equal to 32768: 102 of 6400000  (1 in 62745)
+   expected 1 in 65536 -> 97.7
+
+2. norminv_fp16(32768) = +0.000000
+   true norminv(u=0.5000076) = +0.000019
+   error = 1.912e-05  (fp16 spacing there = 3.5e-4)
+
+3. neighbours for context:
+   i=32766  got=+0.000352  true=-0.000057  err=4.093e-04
+   i=32767  got=+0.000352  true=-0.000019  err=3.710e-04
+   i=32768  got=+0.000000  true=+0.000019  err=1.912e-05
+   i=32769  got=-0.000352  true=+0.000057  err=4.093e-04
+   i=32770  got=-0.000352  true=+0.000096  err=4.475e-04
+
+4. context: max fp16 spline error in the bulk is 5.4e-3,
+   so this input's error is 282.4x SMALLER than the routine
+   quantisation error the estimator already tolerates.
+
+################################################################
+### RESOLVED 2026-08-03: Giles updated my_mm512.h
+################################################################
+
+The fold predicate on line 272 changed:
+
+    -  __mmask32 m = _mm512_cmplt_epu16_mask(two_to_15, i);   // strict, skips i=32768
+    +  __mmask32 m = _mm512_cmpge_epu16_mask(i, two_to_15);   // i >= 2^15, folds it
+
+This is the non-strict comparison the probe above predicted, and it now
+matches the scalar normal_dyadic2's  m = (i >= (1<<15)).
+
+Verified after swapping the header in (coupling_test.cpp Test 4, mimic):
+    asymmetric pairs = 0 of 32768        (was 1)
+coupling_test.cpp's tolerance was tightened from  nasym <= 1  to  nasym == 0
+so a regression cannot pass silently.
+
+Estimator impact: none measurable, as section 4 above predicted. beta over
+all 16 runs (scalar/basket x 4 modes x 2 options) is unchanged vs the
+pre-swap values recorded in CLAUDE.md -- adaptive 2.219/1.913 (scalar),
+1.961/2.151 (basket). One input in 65536 does not move a regression.
+
+Accuracy note, unchanged by the fix: at i=32768 the OLD behaviour was the
+more accurate one (err 1.9e-05 vs 3.7e-04), because the true value there is
+below fp16's 3.5e-4 resolution near zero. The fix buys exact symmetry, not
+accuracy, and gives up 19x at that single input. Both errors are far below
+the 5.4e-3 bulk spline error, so neither matters to the estimator.
+
+### STILL OPEN: scalar vs AVX-512 disagree on 22553 of 65536 inputs
+Section (c) above. NOT addressed by the fold fix -- traced to
+_MM_FROUND_TO_ZERO on the int->fp16 convert in norminv_fp16 (line 277)
+versus round-to-nearest in the scalar normal_dyadic2. Confirmed NOT the FMA.
+Truncation is symmetric under the fold, so Giles' new symmetry test cannot
+detect it. Worth asking whether the truncation is deliberate.

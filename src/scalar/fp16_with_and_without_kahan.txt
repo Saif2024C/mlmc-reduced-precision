@@ -1,0 +1,37 @@
+1. X,A (state variables) , milstein increment , path update and payoff all in fp16. 
+2. Summation should be done in fp64
+3. diagnose levels 0,1,2 onwards and what they print. 
+4. feed in pure fp16 normals using rng. no downcasting from fp32.
+
+5. Path update is done without kahan and is done in order of least error:
+
+Always bracket in such a way that error propagation is minimized when summed up.
+
+Xnew = Xold + ( sig*dW + (a*h + 1/2sig*sig(dW*dW -h)))
+
+where Xnew = Xold + relative error . Assuming independance:
+error ~ N^1/2 * epsilon. (without kahan)
+
+6. get the beta curve to see how it performs (we assume itll go down and then shoot back up)
+7. turn down -O3 aggressive optimization so that the compiler doesn't ignore my bracket ordering.
+
+All this is without kahan. 
+
+run out of outputs folder : 
+
+g++ -O0 -std=c++11 -mf16c -fno-fast-math src/scalar/nested_scalar_milstein_fp16.cpp -o build/nested_scalar_milstein_fp16
+
+for plots: 
+
+python3 python/nested_scalar_fp16_diag_plot_python.py \
+  outputs/nested/13th_july_fp16_kahan_and_no_kahan/scalar/nested_scalar_fp16_1_moments.txt \
+  outputs/nested/13th_july_fp16_kahan_and_no_kahan/scalar/nested_scalar_fp16_2_moments.txt
+
+
+gpt suggested compilization: 
+
+cd ~/mlmc_reference && g++ -O0 -std=c++11 -mf16c -fno-fast-math -ffp-contract=off -fno-tree-vectorize src/scalar/nested_scalar_milstein_fp16.cpp -o build/nested_scalar_milstein_fp16
+cd outputs && ../build/nested_scalar_milstein_fp16
+
+cat outputs/nested_scalar_fp16_1_dbg.txt   # Asian
+cat outputs/nested_scalar_fp16_2_dbg.txt   # Lookback

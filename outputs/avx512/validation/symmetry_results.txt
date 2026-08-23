@@ -1,0 +1,29 @@
+Coupling / symmetry validation -- after Giles header update (cmpge fold fix)
+host: mimic.maths.ox.ac.uk  date: Mon  3 Aug 22:03:54 BST 2026
+header: my_mm512.h with _mm512_cmpge_epu16_mask (was cmplt_epu16, strict)
+
+=== coupling_test.cpp ===
+Test 1: uniform nesting (i16 == i32 >> 7)
+  checked 65536 lane-values
+
+Test 2: lane alignment (fp16 lane j <- word j top 16 bits)
+  checked 4096 lane-values (1 crafted + 255 random cases)
+
+Test 3: coupled draws are close, not independent
+  E[(z32-z16)^2] = 4.986874e-06   (independent Normals give ~2.0)
+  mean           = +6.823e-07  (reported, bounded via E[X^2])
+
+Test 4: norminv_fp16 accuracy vs cdfnorminv (all 65536 inputs)
+  max abs error = 0.00542  bulk |z|<4   (at i=1451)
+  max abs error = 0.06180  extreme tail (at i=0)
+  asymmetric pairs = 0 of 32768  (0 expected)
+
+ALL CHECKS PASSED
+
+=== coupling_test.cpp --selftest ===
+ALL CHECKS PASSED
+
+Self-test: known-bad inputs must be rejected
+  fp16 from LOW 16 bits      rejected
+  two lanes swapped          rejected
+  fp16 from separate draw    rejected

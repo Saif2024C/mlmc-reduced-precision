@@ -1,0 +1,97 @@
+MKL/VSL vs in-register Philox-4x32-10 -- AVX-512 RNG throughput
+host: mimic.maths.ox.ac.uk   date: Sat  1 Aug 23:30:12 BST 2026
+binary: icpx -O3 -march=native -std=c++17 -qopenmp  speed_test.cpp -lmkl_rt
+
+=========== THREADS=1 ===========
+max threads         =          1
+AVX-512 vectors (N) =  134217728
+
+fp32 Normal RNG tests (ICDF):
+  MKL    time (ms) =       2048   RNG/s =  1.048e+09
+  Philox time (ms) =  1.056e+04   RNG/s =  2.034e+08
+  ratio (MKL time / Philox time) =  0.194x  (MKL faster)
+
+UniformBits32 RNG tests:
+  MKL    time (ms) =        533   RNG/s =  4.029e+09
+  Philox time (ms) =       3241   RNG/s =  6.626e+08
+  ratio (MKL time / Philox time) =  0.164x  (MKL faster)
+
+  MKL buffer bandwidth (GB/s) =      32.23   (Philox: in-register, none)
+
+UniformBits32/norminv_fp16 tests:
+  MKL    time (ms) =      907.2   RNG/s =  4.734e+09
+  Philox time (ms) =       4097   RNG/s =  1.048e+09
+  ratio (MKL time / Philox time) =  0.221x  (MKL faster)
+
+fp16 Normal RNG tests (MKL buffered vs Philox on-the-fly):
+  MKL    time (ms) =       2083   RNG/s =  2.062e+09
+  Philox time (ms) =       4092   RNG/s =   1.05e+09
+  ratio (MKL time / Philox time) =  0.509x  (MKL faster)
+
+UniformBits32/gather_fp16 tests:
+  MKL    time (ms) =       2083   RNG/s =  2.062e+09
+  Philox time (ms) =       4557   RNG/s =  9.424e+08
+  ratio (MKL time / Philox time) =  0.457x  (MKL faster)
+
+=========== THREADS=16 ===========
+max threads         =         16
+AVX-512 vectors (N) =  134217728
+
+fp32 Normal RNG tests (ICDF):
+  MKL    time (ms) =      169.4   RNG/s =  1.267e+10
+  Philox time (ms) =      875.3   RNG/s =  2.453e+09
+  ratio (MKL time / Philox time) =  0.194x  (MKL faster)
+
+UniformBits32 RNG tests:
+  MKL    time (ms) =      101.3   RNG/s =  2.121e+10
+  Philox time (ms) =      332.2   RNG/s =  6.465e+09
+  ratio (MKL time / Philox time) =  0.305x  (MKL faster)
+
+  MKL buffer bandwidth (GB/s) =      169.7   (Philox: in-register, none)
+
+UniformBits32/norminv_fp16 tests:
+  MKL    time (ms) =      91.81   RNG/s =  4.678e+10
+  Philox time (ms) =      421.9   RNG/s =  1.018e+10
+  ratio (MKL time / Philox time) =  0.218x  (MKL faster)
+
+fp16 Normal RNG tests (MKL buffered vs Philox on-the-fly):
+  MKL    time (ms) =      209.4   RNG/s =  2.051e+10
+  Philox time (ms) =      421.2   RNG/s =   1.02e+10
+  ratio (MKL time / Philox time) =  0.497x  (MKL faster)
+
+UniformBits32/gather_fp16 tests:
+  MKL    time (ms) =      267.1   RNG/s =  1.608e+10
+  Philox time (ms) =        523   RNG/s =  8.212e+09
+  ratio (MKL time / Philox time) =  0.511x  (MKL faster)
+
+=========== THREADS=64 ===========
+max threads         =         64
+AVX-512 vectors (N) =  134217728
+
+fp32 Normal RNG tests (ICDF):
+  MKL    time (ms) =      90.99   RNG/s =   2.36e+10
+  Philox time (ms) =      300.2   RNG/s =  7.154e+09
+  ratio (MKL time / Philox time) =  0.303x  (MKL faster)
+
+UniformBits32 RNG tests:
+  MKL    time (ms) =      24.05   RNG/s =  8.928e+10
+  Philox time (ms) =      146.3   RNG/s =  1.468e+10
+  ratio (MKL time / Philox time) =  0.164x  (MKL faster)
+
+  MKL buffer bandwidth (GB/s) =      714.2   (Philox: in-register, none)
+
+UniformBits32/norminv_fp16 tests:
+  MKL    time (ms) =      36.58   RNG/s =  1.174e+11
+  Philox time (ms) =        166   RNG/s =  2.588e+10
+  ratio (MKL time / Philox time) =  0.220x  (MKL faster)
+
+fp16 Normal RNG tests (MKL buffered vs Philox on-the-fly):
+  MKL    time (ms) =      63.24   RNG/s =  6.792e+10
+  Philox time (ms) =        166   RNG/s =  2.588e+10
+  ratio (MKL time / Philox time) =  0.381x  (MKL faster)
+
+UniformBits32/gather_fp16 tests:
+  MKL    time (ms) =      90.63   RNG/s =  4.739e+10
+  Philox time (ms) =      208.1   RNG/s =  2.064e+10
+  ratio (MKL time / Philox time) =  0.435x  (MKL faster)
+

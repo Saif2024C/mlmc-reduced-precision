@@ -1,0 +1,71 @@
+=== pass 1: SIMD / instruction mix ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 109.9647 ms   26.22 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            563.45 msec task-clock                       #    0.996 CPUs utilized             
+     1,520,091,925      cycles                           #    2.698 GHz                       
+     2,192,972,780      instructions                     #    1.44  insn per cycle            
+       115,703,808      fp_arith_inst_retired.512b_packed_single #  205.347 M/sec                     
+       144,629,760      fp_arith_inst_retired.256b_packed_single #  256.684 M/sec                     
+                 0      fp_arith_inst_retired2.512b_packed_half #    0.000 /sec                      
+                 0      fp_arith_inst_retired2.256b_packed_half #    0.000 /sec                      
+
+       0.565459919 seconds time elapsed
+
+       0.560695000 seconds user
+       0.003997000 seconds sys
+
+
+
+=== pass 2: L1 / L2 ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 113.5894 ms   27.08 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            626.08 msec task-clock                       #    0.998 CPUs utilized             
+     1,720,710,246      cycles                           #    2.748 GHz                       
+     2,193,266,635      instructions                     #    1.27  insn per cycle            
+       658,124,763      L1-dcache-loads                  #    1.051 G/sec                     
+         1,343,785      L1-dcache-load-misses            #    0.20% of all L1-dcache accesses 
+           192,566      l2_rqsts.miss                    #  307.575 K/sec                     
+
+       0.627270585 seconds time elapsed
+
+       0.625292000 seconds user
+       0.002000000 seconds sys
+
+
+
+=== pass 3: LLC ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 107.8856 ms   25.72 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            662.42 msec task-clock                       #    0.998 CPUs utilized             
+     1,780,521,331      cycles                           #    2.688 GHz                       
+     2,193,466,899      instructions                     #    1.23  insn per cycle            
+            71,449      LLC-loads                        #  107.860 K/sec                     
+            11,540      LLC-load-misses                  #   16.15% of all LL-cache accesses  
+
+       0.663567480 seconds time elapsed
+
+       0.659595000 seconds user
+       0.003997000 seconds sys
+
+
