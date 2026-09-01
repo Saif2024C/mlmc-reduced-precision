@@ -1,0 +1,71 @@
+=== pass 1: SIMD / instruction mix ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 120.8919 ms   28.82 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_m512h --kernel fp32':
+
+            667.33 msec task-clock                       #    0.993 CPUs utilized             
+     1,334,280,679      cycles                           #    1.999 GHz                       
+     2,193,833,825      instructions                     #    1.64  insn per cycle            
+       115,703,808      fp_arith_inst_retired.512b_packed_single #  173.384 M/sec                     
+       144,629,760      fp_arith_inst_retired.256b_packed_single #  216.730 M/sec                     
+                 0      fp_arith_inst_retired2.512b_packed_half #    0.000 /sec                      
+                 0      fp_arith_inst_retired2.256b_packed_half #    0.000 /sec                      
+
+       0.671909343 seconds time elapsed
+
+       0.664978000 seconds user
+       0.003999000 seconds sys
+
+
+
+=== pass 2: L1 / L2 ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 120.8330 ms   28.81 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_m512h --kernel fp32':
+
+            665.92 msec task-clock                       #    0.994 CPUs utilized             
+     1,333,799,286      cycles                           #    2.003 GHz                       
+     2,193,848,487      instructions                     #    1.64  insn per cycle            
+       658,298,657      L1-dcache-loads                  #  988.550 M/sec                     
+            44,205      L1-dcache-load-misses            #    0.01% of all L1-dcache accesses 
+            63,165      l2_rqsts.miss                    #   94.853 K/sec                     
+
+       0.669965619 seconds time elapsed
+
+       0.665505000 seconds user
+       0.002001000 seconds sys
+
+
+
+=== pass 3: LLC ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 120.7760 ms   28.80 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_m512h --kernel fp32':
+
+            664.45 msec task-clock                       #    0.995 CPUs utilized             
+     1,333,251,133      cycles                           #    2.007 GHz                       
+     2,193,866,395      instructions                     #    1.65  insn per cycle            
+            16,590      LLC-loads                        #   24.968 K/sec                     
+               480      LLC-load-misses                  #    2.89% of all LL-cache accesses  
+
+       0.668051822 seconds time elapsed
+
+       0.660918000 seconds user
+       0.004991000 seconds sys
+
+

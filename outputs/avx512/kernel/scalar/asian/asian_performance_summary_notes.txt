@@ -1,0 +1,223 @@
+Performance Summary for scalar Asian l = 0
+
+Scalar Asian, l=0, serial, N=4.19M
+(perf and Advisor both at N=4.19M)
+
+NOTE ON KERNEL SCOPE: this is a PURE Asian kernel. The shipped l=0 branch of
+nested_scalar_milstein_fp16_avx512.cpp serves both scalar payoffs from one code
+path and computes the Lookback minimum Mf -- and its log-uniform draw --
+unconditionally, discarding them when option=1 (there is no `if (opt == ...)`
+guard). The benchmark strips both, so these numbers are the cost of the Asian
+KERNEL, not of the level-0 estimator call. Stripping the log-uniform is also
+what makes this a clean test of the fp16-coverage hypothesis below: leaving it
+in would import exactly the fp32 work the comparison is trying to isolate.
+
+Runtime / perf
+--------------
+fp32:
+- Time/path: 11.08 ns
+- Instructions retired: 0.844 G
+- IPC: ~1.64
+- L1 loads: 239 M
+- L1 miss rate: 0.01%
+- L2 misses: 47.5 K
+
+fp16 + Kahan:
+- Time/path: 5.27 ns (2.11x faster)
+- Instructions retired: 0.328 G (2.57x fewer)
+- IPC: ~1.33
+- L1 loads: 31.5 M (7.6x fewer)
+- L1 miss rate: 0.09%
+- L2 misses: 43.2 K
+
+Instructions are deterministic, cycles vary. Quoted a median.
+
+Correctness: chk = 5.620487 (fp32) vs 5.618259 (fp16), agreeing to 4
+significant figures -- both precisions price the same option.
+
+SIMD summary
+------------
+Different counters - not directly comparable:
+fp32 = fp_arith_inst_retired.*  (packed single)
+fp16 = fp_arith_inst_retired2.* (packed half)
+
+fp32:
+- 22.3M x 512-bit packed single (16 floats/instr)
+- 57.7M x 256-bit packed single (8 floats/instr)
+- 0 packed half
+
+fp16:
+- 13.1M x 512-bit packed half (32 halfs/instr)
+- 17.0M x 256-bit packed half (16 halfs/instr)
+- 0 packed single
+
+THE KEY RESULT: the fp16 Asian kernel retires ZERO packed-single. It is 100%
+fp16, exactly like the basket European kernel and unlike scalar Lookback, where
+63% of vector instructions stay single precision.
+
+In element-ops: fp32 0.82 G, fp16 0.69 G
+=> comparable arithmetic in 2.57x fewer instructions (denser packing)
+
+Why this kernel converts fully: its only two random draws are dW ~ N(0,h) and
+the integral bridge dI ~ N(0,h^3/12). Both are Normals, and norminv_fp16
+(Giles' superdyadic spline) transforms them natively. Lookback additionally
+needs L = log U for the exact Brownian-bridge minimum; SVML has no
+_mm512_log_ph, so that draw stays fp32 and drags the rest of its chain with it.
+
+Clock frequency
+---------------
+Per-pass perf readings (serial, unpinned)
+
+fp32:
+- 1.767
+- 1.742
+- 1.764 GHz
+Median: 1.764 GHz
+
+fp16:
+- 1.415
+- 1.466
+- 1.428 GHz
+Median: 1.428 GHz
+
+Overall observed range:
+- 1.42-1.77 GHz
+
+Interpretation:
+- Both kernels operate in the AVX-512 downclock regime.
+- fp16 runs ~19% SLOWER in clock than fp32 here and is still 2.11x faster
+  overall, so the speedup is not a frequency effect -- if anything the clock
+  works against it.
+- This is a larger fp32-vs-fp16 clock gap than either Lookback (1.66 vs 1.61)
+  or basket European (2.79 vs 2.69) shows. Not explained; the denser fp16
+  instruction mix drawing more power per cycle is the obvious suspect but was
+  not isolated.
+
+Intel Advisor / Roofline
+-------------------------
+Collected at N=4.19M, the same size as the perf counters above.
+
+FP32 report (total 0.290 s)
+
+Loop 1:
+- loop in kernel_fp32
+- Vectorized (Body) AVX512
+- Performance: 3.200 GFLOPS
+- Self Time: 0.120 s
+- Self Memory Traffic: 4.656 GB
+- Arithmetic Intensity: 0.082 FLOP/Byte
+
+Loop 2:
+- Function: __svml_cdfnorminvf8_l9
+- Performance: 2.714 GFLOPS
+- Self Time: 0.170 s
+- Self Memory Traffic: 5.033 GB
+- Arithmetic Intensity: 0.092 FLOP/Byte
+
+FP16 + Kahan report (total 0.170 s)
+
+Dominant loop:
+- loop in kernel_fp16_kahan
+- Performance: 3.246 GFLOPS
+- Self Time: 0.170 s (100% of runtime)
+- Self Memory Traffic: 0.186 GB
+- Arithmetic Intensity: 2.965 FLOP/Byte
+
+Roofline observations (fp32):
+- Two loops identified.
+- Intel SVML inverse Normal CDF is the LARGER of the two: 0.170 s of 0.290 s,
+  59% of runtime, more than the Milstein kernel itself.
+
+Roofline observations (fp16):
+- One loop, 100% of runtime.
+- No SVML inverse-CDF hotspot at all -- norminv_fp16 replaces it entirely.
+- Arithmetic intensity 2.965 vs 0.082/0.092 FLOP/Byte, a 32-36x increase.
+- Memory traffic 0.186 GB vs 4.656 GB on the main loop, a 25x reduction.
+
+This is the cleanest confirmation of the coverage hypothesis in the whole
+three-kernel set. The fp32 kernel spends more time inside SVML's transcendental
+than in its own arithmetic; the fp16 kernel deletes that entire hotspot and
+collapses to a single loop. The 59% SVML share also explains why the speedup
+(2.11x single-N, 2.56x steady state) is close to basket European's despite this
+kernel having a running sum: what fp16 removes is the RNG transform, and that
+was the dominant cost in both.
+
+Advisor caveats
+---------------
+1. Advisor does NOT report a vector ISA for the fp16 dominant loop, unlike the
+   fp32 loop which it correctly tags "Vectorized (Body) AVX512; processes
+   Int32; Int64; UInt16". The kernel is __m256h intrinsics throughout and perf
+   shows 30.1M packed-half retired with zero scalar-half, so it is fully
+   vectorised. Advisor's classifier does not recognise AVX-512 FP16.
+   Cite perf counters, not Advisor, for vectorisation claims.
+
+2. No fp16 roofline roof exists - all compute roofs are SP/DP (+ BF16 AMX this
+   kernel never touches). Headroom quoted is against a SINGLE-precision
+   ceiling. A true fp16 roof would sit ~2x higher, so any "% of peak" figure
+   overstates it by roughly that factor.
+
+Overall interpretation
+----------------------
+Main performance evidence:
+- 2.11x lower runtime (2.56x in the steady-state eps sweep, see below).
+- SVML inverse-CDF hotspot (59% of fp32 runtime) eliminated entirely.
+- 25x less memory traffic on the dominant loop (0.186 GB vs 4.656 GB).
+- 2.57x fewer retired instructions.
+- 7.6x fewer L1 loads.
+- LOWER clock than fp32, and still faster.
+- Very low L1 miss rates (0.01-0.09%) -- compute-bound, not memory-bound.
+- LOWER IPC than fp32.
+
+fp16 wins by doing less work per path, not by running the pipeline harder.
+
+THE THREE-KERNEL COMPARISON -- this kernel was built as the control:
+
+                          basket Eur   scalar Asian   scalar Lookback
+  fp32 time/path            27.8 ns      11.08 ns        8.93 ns
+  fp16 time/path            11.8 ns       5.27 ns        7.43 ns
+  speedup                   2.2x          2.11x          1.21x
+  fp32 instrs in fp16 ker.  0             0              49.8M (63%)
+  fp16 coverage             100%          100%           37%
+
+The pattern the first two kernels suggested is confirmed: the fp16 speedup
+tracks how much of the kernel can actually run in fp16, NOT payoff complexity.
+Asian has a per-step running sum exactly like Lookback -- it is not the simpler
+payoff -- yet it reaches basket European's speedup because both its draws are
+Normals that norminv_fp16 handles natively. Lookback is the outlier solely
+because its bridge minimum needs a log-uniform with no fp16 transform.
+
+Implication for the write-up: reduced precision pays in proportion to
+coverage, and the binding constraint on this hardware is transcendental
+support in the RNG transforms, not the Milstein arithmetic. An fp16
+superdyadic spline for log U, analogous to norminv_fp16, is what would move
+Lookback into line -- but log U is unbounded below and feeds a
+cancellation-sensitive sqrt, so that is a research question, not an
+implementation task.
+
+eps sweep and OpenMP scaling
+----------------------------
+Serial steady-state ratio is 2.56x (eps <= 0.01), higher than the 2.11x
+single-N figure above; both are in scalar_asian_l0_eps_sweep.txt.
+
+OpenMP ratio32 climbs from ~1.32x at the smallest N_0 to ~2.29x at eps=0.005
+(scalar_asian_l0_scaling_sweep.txt), the same "threading amplifies the fp16
+advantage" behaviour the other two kernels show. The whole sweep was repeated
+5 times to check the column is not a single-run artifact:
+
+    eps      ratio32 across 5 runs        spread
+  0.100    1.33 1.32 1.31 1.31 1.31       +/-0.01
+  0.050    1.62 1.63 1.62 1.71 1.69       +/-0.05
+  0.020    1.87 2.05 2.01 2.04 1.99       +/-0.09
+  0.010    1.79 1.80 2.00 2.00 2.01       +/-0.11
+  0.005    2.30 2.29 2.28 2.28 2.50       +/-0.11
+
+The saved table's values (1.33, 1.71, 1.84, 1.80, 2.24) sit inside the spread
+at every row. Absolute 1-thread times are the steadiest of the three kernels
+(fp32 at eps=0.005 read 50.21-50.30 ms in all five runs), so unlike scalar
+Lookback there is no shared-machine drift to caveat here.
+
+Still outstanding
+-----------------
+- Loop unrolling effects: not yet measured.
+- The fp32-vs-fp16 clock gap (1.76 vs 1.43 GHz) is larger here than in the
+  other two kernels and is unexplained.

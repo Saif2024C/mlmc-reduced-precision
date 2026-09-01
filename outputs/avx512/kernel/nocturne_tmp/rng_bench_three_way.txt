@@ -1,0 +1,44 @@
+RNG benchmark: mimic ORIGINAL (thesis) vs mimic IDLE vs nocturne
+N = 33,600,000 vectors. mimic idle: load 0.45. nocturne: load 9.4.
+
+TABLE 2.2 speedups (ours / MKL), Philox both sides
+stage             thr |      thesis  mimic idle    nocturne
+uniform bits        1 |        1.06        1.28        2.40
+FP32 Normal         1 |        0.95        0.95        0.86
+FP16 Normal         1 |        0.88        0.87        0.85
+uniform bits       16 |        1.87        2.66        2.81
+FP32 Normal        16 |        1.09        0.98        1.85
+FP16 Normal        16 |        0.88        0.90        0.85
+
+TABLE 2.3 speedups (ours / MKL), uniform bits only
+MKL gen         thr |      thesis  mimic idle    nocturne
+PHILOX            1 |        1.06        1.28        2.40
+PHILOX           16 |        2.11        2.66        2.81
+MT19937           1 |        0.60        0.82        1.86
+MT19937          16 |        1.34        1.86        2.48
+SFMT19937         1 |        0.57        0.78        1.49
+SFMT19937        16 |        1.10        1.74        2.00
+MCG59             1 |        0.55        0.78        1.13
+MCG59            16 |        1.22        1.75        2.07
+
+ABSOLUTE RATES, 1 thread, uniform bits (RNG/s)
+  ours:  thesis 3.11e9 | mimic idle 1.705e9 | nocturne 3.099e9
+  MKL :  thesis 2.93e9 | mimic idle 1.330e9 | nocturne 1.292e9
+
+FINDINGS
+  1. The QUALITATIVE conclusions of Tables 2.2/2.3 hold on idle mimic:
+     in-register wins on raw bits, loses once a transform is applied,
+     and loses to the cheap generators at 1 thread (0.78-0.82).
+  2. But the NUMBERS move. 1-thread uniform bits 1.06 -> 1.28;
+     16-thread 1.87 -> 2.66. Table 2.3's 1-thread values move
+     0.55-0.60 -> 0.78-0.82.
+  3. Absolute rates on idle mimic are ~1.8x LOWER than the thesis run
+     for BOTH sides (ours 3.11e9 -> 1.705e9). Both scale together, so
+     the ratios survive, but the thesis run was evidently at a higher
+     clock than an idle machine reaches now. Unexplained.
+  4. nocturne remains the outlier: MKL is much slower there while our
+     generator is unchanged, so every ratio inflates.
+
+RECOMMENDATION: the thesis numbers are reproducible in DIRECTION but
+not in VALUE. If the tables are re-run, re-run all rows in one session
+on one machine and record the load.

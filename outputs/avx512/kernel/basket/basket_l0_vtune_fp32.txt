@@ -1,0 +1,156 @@
+Elapsed Time: 0.572s
+    Clockticks: 1,540,000,000
+    Instructions Retired: 2,189,000,000
+    CPI Rate: 0.704
+    Bottlenecks View (preview)
+        Mispredictions: 0.0% of Pipeline Slots
+        Big Code: 0.0% of Pipeline Slots
+        Instruction Fetch Bandwidth: 20.0% of Pipeline Slots
+        Cache Memory Bandwidth: 0.0% of Pipeline Slots
+        Cache Memory Latency: 0.0% of Pipeline Slots
+        Memory Data TLBs: 0.0% of Pipeline Slots
+        Memory Synchronization: 0.0% of Pipeline Slots
+        Compute Bound Estimation: 0.0% of Pipeline Slots
+        Irregular Overhead: 0.0% of Pipeline Slots
+        Other Bottlenecks: 0.0% of Pipeline Slots
+        Branching Overhead: 0.0% of Pipeline Slots
+        Useful Work: 80.0% of Pipeline Slots
+    Top-down Microarchitecture Analysis (TMA)
+        Retiring: 80.0% of Pipeline Slots
+            Light Operations: 70.0% of Pipeline Slots
+                FP Arithmetic: 12.5% of uOps
+                    FP x87: 0.0% of uOps
+                    FP Scalar: 0.0% of uOps
+                    FP Vector: 12.5% of uOps
+                        128-bit FP Vector: 0.0% of uOps
+                        256-bit FP Vector: 0.0% of uOps
+                        512-bit FP Vector: 0.0% of uOps
+                Integer Operations: 0.0% of uOps
+                    128-bit Integer Vector Operations: 0.0% of uOps
+                    256-bit Vector Operations: 0.0% of uOps
+                Memory Operations: 21.9% of Pipeline Slots
+                Fused Instructions: 0.0% of Pipeline Slots
+                Non Fused Branches: 0.0% of Pipeline Slots
+                Other: 35.6% of Pipeline Slots
+                    Nop Instructions: 0.0% of Pipeline Slots
+                    Shuffles_256b: 4.4% of Pipeline Slots
+            Heavy Operations: 10.0% of Pipeline Slots
+                Few Uops Instructions: 10.0% of Pipeline Slots
+                Microcode Sequencer: 0.0% of Pipeline Slots
+                    Assists: 0.0% of Pipeline Slots
+                        Page Faults: 0.0% of Pipeline Slots
+                        FP Assists: 0.0% of Pipeline Slots
+                        AVX Assists: 0.0% of Pipeline Slots
+                    CISC: 0.0% of Pipeline Slots
+        Front-End Bound: 20.0% of Pipeline Slots
+            Front-End Latency: 0.0% of Pipeline Slots
+                ICache Misses: 0.0% of Clockticks
+                    Code L2 Hit: 0.0% of Clockticks
+                    Code L2 Miss: 0.0% of Clockticks
+                ITLB Misses: 0.0% of Clockticks
+                    Code STLB Hit: 0.0% of Clockticks
+                    Code STLB Miss: 0.0% of Clockticks
+                        Code STLB Miss 4K: 0.0% of Clockticks
+                        Code STLB Miss 2M: 0.0% of Clockticks
+                Branch Resteers: 0.0% of Clockticks
+                    Mispredicts Resteers: 0.0% of Clockticks
+                    Clears Resteers: 0.0% of Clockticks
+                    Unknown Branches: 0.0% of Clockticks
+                MS Switches: 0.0% of Clockticks
+                Length Changing Prefixes: 0.0% of Clockticks
+                DSB Switches: 0.0% of Clockticks
+            Front-End Bandwidth: 20.0% of Pipeline Slots
+                Front-End Bandwidth MITE: 0.0% of Pipeline Slots
+                    Decoder-0 Alone: 0.0% of Pipeline Slots
+                Front-End Bandwidth DSB: 0.0% of Pipeline Slots
+                MS: 0.0% of Pipeline Slots
+                (Info) DSB Coverage: 72.7%
+                (Info) DSB Misses: 0.0% of Pipeline Slots
+        Bad Speculation: 0.0% of Pipeline Slots
+            Branch Mispredict: 0.0% of Pipeline Slots
+                Other Mispredicts: 0.0% of Pipeline Slots
+            Machine Clears: 0.0% of Pipeline Slots
+                Other Nukes: 0.0% of Pipeline Slots
+        Back-End Bound: 0.0% of Pipeline Slots
+            Memory Bound: 0.0% of Pipeline Slots
+                L1 Bound: 0.0% of Clockticks
+                    DTLB Overhead: 0.0% of Clockticks
+                        Load STLB Hit: 0.0% of Clockticks
+                        Load STLB Miss: 0.0% of Clockticks
+                            Load STLB Miss 4K: 0.0% of Clockticks
+                            Load STLB Miss 2M: 0.0% of Clockticks
+                            Load STLB Miss 1G: 0.0% of Clockticks
+                    Loads Blocked by Store Forwarding: 0.0% of Clockticks
+                    L1 Latency Dependency: 20.0% of Clockticks
+                    Lock Latency: 0.0% of Clockticks
+                    Split Loads: 0.0% of Clockticks
+                    FB Full: 0.0% of Clockticks
+                L2 Bound: 0.0% of Clockticks
+                    L2 Hit Latency: 0.0% of Clockticks
+                L3 Bound: 0.0% of Clockticks
+                    Contested Accesses: 0.0% of Clockticks
+                    Data Sharing: 0.0% of Clockticks
+                    L3 Latency: 0.0% of Clockticks
+                    SQ Full: 0.0% of Clockticks
+                DRAM Bound: 0.0% of Clockticks
+                    Memory Bandwidth: 0.0% of Clockticks
+                        MBA Stalls: 0.0% of Clockticks
+                    Memory Latency: 0.0% of Clockticks
+                        Local Memory: 0.0% of Clockticks
+                        Remote Memory: 0.0% of Clockticks
+                        Remote Cache: 0.0% of Clockticks
+                Store Bound: 0.0% of Clockticks
+                    Store Latency: 0.0% of Clockticks
+                    False Sharing: 0.0% of Clockticks
+                    Split Stores: 0.0%
+                    Streaming Stores: 0.0% of Clockticks
+                    DTLB Store Overhead: 0.0% of Clockticks
+                        Store STLB Hit: 0.0% of Clockticks
+                        Store STLB Miss: 0.0% of Clockticks
+                            Store STLB Miss 4K: 0.0% of Clockticks
+                            Store STLB Miss 2M: 0.0% of Clockticks
+                            Store STLB Miss 1G: 0.0% of Clockticks
+            Core Bound: 0.0% of Pipeline Slots
+                Divider: 0.0% of Clockticks
+                    FP Divider: 0.0% of Clockticks
+                    INT Divider: 0.0% of Clockticks
+                Serializing Operations: 0.0% of Clockticks
+                    Slow Pause: 0.0% of Clockticks
+                    C01 Wait: 0.0% of Clockticks
+                    C02 Wait: 0.0% of Clockticks
+                    Memory Fence: 0.0% of Clockticks
+                AMX Busy: 0.0% of Clockticks
+                Port Utilization: 45.0% of Clockticks
+                    Cycles of 0 Ports Utilized: 0.0% of Clockticks
+                        Mixing Vectors: 0.0% of Clockticks
+                    Cycles of 1 Port Utilized: 25.0% of Clockticks
+                    Cycles of 2 Ports Utilized: 25.0% of Clockticks
+                    Cycles of 3+ Ports Utilized: 25.0% of Clockticks
+                        ALU Operation Utilization: 36.4% of Clockticks
+                            Port 0: 90.9% of Clockticks
+                            Port 1: 0.0% of Clockticks
+                            Port 6: 0.0% of Clockticks
+                        Load Operation Utilization: 30.3% of Clockticks
+                        Store Operation Utilization: 0.0% of Clockticks
+                    Vector Capacity Usage (FPU): 0.0%
+    Average CPU Frequency: 2.775 GHz
+    Total Thread Count: 2
+    Paused Time: 0s
+Effective Physical Core Utilization: 0.8% (0.534 out of 64)
+    Effective Logical Core Utilization: 0.8% (0.971 out of 128)
+Collection and Platform Info
+    Application Command Line: ./kb_basket_l0 "--kernel" "fp32" 
+    Operating System: 6.8.0-117-generic DISTRIB_ID=Ubuntu DISTRIB_RELEASE=24.04 DISTRIB_CODENAME=noble DISTRIB_DESCRIPTION="Ubuntu 24.04.4 LTS"
+    Computer Name: mimic.maths.ox.ac.uk
+    Result Size: 7.4 MB 
+    Collection start time: 18:41:16 24/08/2026 UTC
+    Collection stop time: 18:41:16 24/08/2026 UTC
+    Collector Type: Driverless Perf system-wide sampling
+    CPU
+        Name: Intel(R) Xeon(R) Processor code named Emeraldrapids
+        Frequency: 2.200 GHz
+        Logical CPU Count: 128
+        LLC size: 62.9 MB 
+        Cache Allocation Technology
+            Level 2 capability: available
+            Level 3 capability: available

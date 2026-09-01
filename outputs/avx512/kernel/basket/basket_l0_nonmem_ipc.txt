@@ -1,0 +1,45 @@
+Non-memory IPC -- basket European level-0 kernel
+N = 4,194,304, serial, mimic (Xeon Gold 6538Y+). 2026-08-25.
+
+Counters: mem_inst_retired.all_loads / .all_stores are INSTRUCTION-retired
+counters, so they are unit-consistent with "instructions" and the
+subtraction (instructions - loads - stores) is exact. Both were verified
+identical to L1-dcache-loads / L1-dcache-stores in the same pass, so the
+earlier L1-dcache-based estimate needed no correction.
+
+                                 FP32           FP16    ratio
+instructions               2193926485      896624138     2.45
+loads                       658321495      126558637     5.20
+stores                      231355235       25878285     8.94
+cycles                     1334680883      569134599     2.35
+
+FP32:
+  memory instructions       889676730   (40.6% of stream)
+  non-memory instr         1304249755   (59.4%)
+  IPC (all)                     1.644
+  IPC (non-memory)              0.977
+
+FP16:
+  memory instructions       152436922   (17.0% of stream)
+  non-memory instr          744187216   (83.0%)
+  IPC (all)                     1.575
+  IPC (non-memory)              1.308
+
+HEADLINE
+  Total IPC slightly favours FP32 (1.64 vs 1.58), but NON-MEMORY IPC
+  favours FP16 (1.31 vs 0.98). FP32 spends 40.6% of its instruction
+  stream on loads and stores, against 17.0% for FP16. FP32 is not
+  retiring more useful work per cycle, it is retiring more memory traffic.
+
+CAVEAT
+  Effective clock in this pass was 2.00 GHz (FP32) / 1.82 GHz (FP16),
+  below the ~2.7 GHz seen in the kbench_perf passes, so absolute IPC here
+  is not comparable with Table 4.4. Compare ratios within this run only.
+
+  VTune (uarch-exploration, same kernels) gives the same conclusion in
+  pipeline slots, with no subtraction needed:
+    Memory Operations   FP32 21.9%  vs  FP16 10.0%  of pipeline slots
+    FP Arithmetic       FP32 12.5%  vs  FP16 11.7%  of uops
+
+Raw perf output: basket_l0_nonmem_fp32.txt, basket_l0_nonmem_fp16.txt
+Reproduce: make kbench_nonmem KERNEL=fp32   (and KERNEL=fp16)

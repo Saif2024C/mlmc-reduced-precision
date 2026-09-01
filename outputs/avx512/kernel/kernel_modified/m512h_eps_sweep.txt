@@ -1,0 +1,22 @@
+(basket European, from the complexity table's N_l column)
+
+    eps       N_0 |  fp32(ms)  ns/path     Mp/s |  fp16(ms)  ns/path     Mp/s |  ratio
+  0.200      9704 |    0.7681    78.96    12.67 |    0.1619    16.64    60.09 |  4.74x
+  0.100     44758 |    3.1566    70.51    14.18 |    0.5998    13.40    74.64 |  5.26x
+  0.050    173030 |    7.8298    45.24    22.10 |    1.5466     8.94   111.90 |  5.06x
+  0.020   1169929 |   33.7197    28.82    34.70 |    7.1292     6.09   164.11 |  4.73x
+  0.010   4658857 |  134.3568    28.84    34.68 |   28.4374     6.10   163.83 |  4.72x
+
+  Correctness check (chk = mean discounted payoff):
+    eps       N_0 |    fp32 chk    fp16 chk       gap
+  0.200      9704 |   11.023382   10.913201  1.10e-01
+  0.100     44758 |   10.922562   11.066849  1.44e-01
+  0.050    173030 |   10.957310   11.011891  5.46e-02
+  0.020   1169929 |   10.969992   10.968013  1.98e-03
+  0.010   4658857 |   10.956036   10.951501  4.53e-03
+
+  ns/p = nanoseconds per path.  A flat ns/p column means the
+  kernel's efficiency is size-independent; a rising one means
+  something degrades as the trip count grows.  The two smallest
+  N_0 inflate ns/p in BOTH kernels -- per-call overhead not yet
+  amortised -- so quote eps <= 0.02 for the steady-state cost.

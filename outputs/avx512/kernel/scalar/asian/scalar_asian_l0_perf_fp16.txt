@@ -1,8 +1,8 @@
 === pass 1: SIMD / instruction mix ===
 Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
   RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
-  (pure Asian: the shipped l=0 branch also computes a running minimum
-   and its log-uniform draw and discards them; that dead
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
    work is stripped here)
   threads = 1 (serial build)
   reps    = 5 per timing
@@ -30,8 +30,8 @@ fp16+Kahan   N = 4194304     best  23.1189 ms    5.51 ns/path  chk 5.618259
 === pass 2: L1 / L2 ===
 Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
   RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
-  (pure Asian: the shipped l=0 branch also computes a running minimum
-   and its log-uniform draw and discards them; that dead
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
    work is stripped here)
   threads = 1 (serial build)
   reps    = 5 per timing
@@ -58,8 +58,8 @@ fp16+Kahan   N = 4194304     best  22.6003 ms    5.39 ns/path  chk 5.618259
 === pass 3: LLC ===
 Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
   RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
-  (pure Asian: the shipped l=0 branch also computes a running minimum
-   and its log-uniform draw and discards them; that dead
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
    work is stripped here)
   threads = 1 (serial build)
   reps    = 5 per timing

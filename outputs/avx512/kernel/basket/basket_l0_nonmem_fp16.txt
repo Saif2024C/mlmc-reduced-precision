@@ -1,0 +1,24 @@
+=== non-memory IPC counters ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  51.3666 ms   12.25 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            313.40 msec task-clock                       #    0.992 CPUs utilized             
+       569,134,599      cycles                           #    1.816 GHz                       
+       896,624,138      instructions                     #    1.58  insn per cycle            
+       126,558,637      mem_inst_retired.all_loads       #  403.828 M/sec                     
+        25,878,285      mem_inst_retired.all_stores      #   82.573 M/sec                     
+       126,558,637      L1-dcache-loads                  #  403.828 M/sec                     
+        25,878,285      L1-dcache-stores                 #   82.573 M/sec                     
+
+       0.315825951 seconds time elapsed
+
+       0.312956000 seconds user
+       0.002006000 seconds sys
+
+

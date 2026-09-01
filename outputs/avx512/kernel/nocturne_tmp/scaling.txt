@@ -1,0 +1,24 @@
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 128 (OpenMP)
+  reps    = 5 per timing
+
+OpenMP scaling at the driver's own level-0 sample counts
+(basket European; 32 threads = one full socket of physical
+ cores on mimic -- no hyperthreading, no NUMA crossing)
+median of 5 independent trials, 5 reps each, interleaved
+
+  Wall clock (ms):
+    eps       N_0 | fp32 1thr  fp32 32t | fp16 1thr  fp16 32t | ratio32
+  0.200      9704 |    1.0591    0.0699 |    0.4420    0.0451 |  1.55x
+  0.100     44758 |    2.1949    0.1180 |    0.8771    0.0629 |  1.88x
+  0.050    173030 |    2.8880    0.1411 |    1.1809    0.0670 |  2.11x
+  0.020   1169929 |   18.5599    0.5980 |    7.9911    0.2692 |  2.22x
+  0.010   4658857 |   73.9472   14.4491 |   31.8401    4.6480 |  3.11x
+
+  Times in ms.  ratio32 = fp32/fp16 wall clock at 32
+  threads; compare it with the serial ratio (~2.35x) to see
+  whether threading erodes the fp16 advantage.
+  The two smallest N_0 run for well under a millisecond at 32
+  threads, where thread-startup overhead is a large fraction
+  of the measurement.  Quote eps <= 0.02.

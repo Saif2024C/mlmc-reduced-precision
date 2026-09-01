@@ -48,6 +48,13 @@ source /opt/intel/oneapi/setvars.sh
 icpx -O3 -march=native -std=c++17 src/AVX-512/nested_scalar_milstein_fp16_avx512.cpp -o build/nsk_avx
 ```
 
+The FP32 reference the nested schemes are compared against is standard
+non-nested MLMC, built separately by `std_mlmc_fp32_scalar_avx512.cpp` and
+`std_mlmc_fp32_basket_avx512.cpp`. These reuse the nested estimators' own
+level function, so the arithmetic, the Philox stream and the payoff are
+identical and only the ladder differs. Their output goes in
+`outputs/avx512/stdmlmc/`, which the overlay and cost scripts read.
+
 `src/AVX-512/Makefile` builds and runs every AVX-512 variant, serial and
 OpenMP, with per-payoff timing.
 
@@ -69,8 +76,8 @@ exponent, which is 1 for these estimators.
 | FP16, no compensation | 0.262 | -0.499 | -0.745 |
 | FP16, Kahan compensated | 1.089 | 1.036 | 0.824 |
 | Adaptive, FP16 below cut-off | 1.961 | 2.151 | 2.219 |
-| Pure FP32 | 1.929 | 2.138 | 2.189 |
+| Pure FP32 (non-nested MLMC) | 1.929 | 2.138 | 2.189 |
 
-At matched sample counts the level-0 kernel runs 2.2x faster in FP16 with
-Kahan compensation than in FP32 for the basket European payoff, and 2.11x for
+At matched sample counts the level-0 kernel runs 2.07x faster in FP16 with
+Kahan compensation than in FP32 for the basket European payoff, and 1.84x for
 the scalar Asian payoff.

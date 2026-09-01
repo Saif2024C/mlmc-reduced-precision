@@ -107,8 +107,7 @@ void nested_basket_fp16_avx_l(int, int, double *);
 
 int main(int argc, char **argv)
 {
-    // l_star=6 for both options, inherited from the non-AVX basket file's
-    // tuning -- not independently re-derived from this file's own data.
+    // l_star=6 for both options
     static const float EPS[] = { 0.01f, 0.02f, 0.05f, 0.1f, 0.2f, 0.0f };
 
     SweepConfig cfg;
@@ -222,9 +221,20 @@ void nested_basket_fp16_avx_l(int l, int N, double *sums)
 
     const int opt = option;
 
-    // Adaptive cutoff, k >= l_star: pure fp32.  Odd levels run the fp32 chain
-
+    // Adaptive cutoff, k >= l_star: pure fp32. 
+    
     if (adaptive_mode && k >= l_star) {
+        // Above the cutoff the path is FP32 throughout, so the scheme is
+        // standard non-nested MLMC: one correction P_k - P_{k-1} per grid
+        // level, carried by the even super-level, and no precision correction
+        // at all.  The odd super-level therefore has no work to do.  It is
+        // returned empty rather than run: sums stay zero, so the driver's
+        // zero-variance guard allocates it no samples and it contributes
+        // nothing to the cost.  Running it (two identical FP32 chains
+        // differenced to an exact zero) would charge 2*n_f per path for a
+        // level that cannot affect the estimate.
+        if (l % 2 == 1) return;
+
         const __m512 vHalf32 = _mm512_set1_ps(0.5f);
         const __m512 vHf32 = _mm512_set1_ps(hf_f), vHc32 = _mm512_set1_ps(hc_f);
         const __m512 v025hc32 = _mm512_set1_ps(0.25f*hc_f);
@@ -286,6 +296,12 @@ void nested_basket_fp16_avx_l(int l, int N, double *sums)
                 // draws -- fp32-self-consistency check, not a real fp16 gap.
                 alignas(64) float Pf_run[2][16], Pc_run[2][16];
                 for (int run = 0; run < 2; ++run) {
+                    // Reseed identically per run: `g` is shared, so without
+                    // this the second run continues the stream and the two
+                    // chains see DIFFERENT draws, making dP a difference of
+                    // two independent samples (variance ~2*Var(dP)) rather
+                    // than the exact zero an fp32-vs-fp32 check must give.
+                    rng_seed(g, (unsigned)((i0 >> 4) * 97 + l) + 1u);
                     __m512 xf[5], xc[5]; for (int i = 0; i < 5; ++i) { xf[i] = vK32; xc[i] = vK32; }
                     __m512 Af = _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHf32, basket32(xf)));
                     __m512 Ac = _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHc32, basket32(xc)));

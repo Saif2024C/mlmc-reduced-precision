@@ -96,11 +96,18 @@ void mlmc_test(void (*mlmc_l)(int, int, double *), int N,int L,
                 - 3.0*sums[1]*sums[1]*sums[1]*sums[1] )
              / (var1[l]*var1[l]);
 
-    if (l==1 || (l%2==0)) 
+    if (l==1 || (l%2==0))
     // Only odd correction levels greater than 1 get a consistency check.
       chk1[l] = 0.0f;
+    else if (cost[l] == 0.0f)
+      // A zero-cost odd level carries no precision correction at all: this is
+      // the adaptive scheme above its cutoff, where the path is FP32
+      // throughout and the scheme is standard non-nested MLMC. 
+      chk1[l] = sqrtf((float) N) *
+                 fabsf( del1[l-1] + del2[l-3] - del2[l-1] )
+        / (3.0f*( sqrtf(var1[l-1]) + sqrtf(var2[l-3]) + sqrtf(var2[l-1]) ));
     else
-      chk1[l] = sqrtf((float) N) * 
+      chk1[l] = sqrtf((float) N) *
                  fabsf( del1[l-1]  +       del2[l-3]  -       del2[l-1]
                       + del1[l]    +       del2[l-2]  -       del2[l]   )
         / (3.0f*( sqrtf(var1[l-1]) + sqrtf(var2[l-3]) + sqrtf(var2[l-1] )
@@ -188,10 +195,18 @@ void mlmc_test(void (*mlmc_l)(int, int, double *), int N,int L,
         // printf(" l, Cl, cost = %d  %f  %f \n",l,Cl[l],cost[l]);
 	mlmc_cost += Nl[l]*Cl[l];
 	if ((l%2)==0) {
+          // Cost of one path at this grid level.  Normally that is the odd
+          // super-level's cost, which runs both precisions and so carries the
+          // full per-path price.  Above the adaptive cutoff the odd level does
+          // not exist (the scheme is standard non-nested MLMC there), and the
+          // even level's own cost is the per-path price; without this the
+          // reference cost would be read as zero.
           if (l<=2*L)
-            std_cost = var2[l]*cost[l+1] / ((1.0f-theta)*eps*eps);
+            std_cost = var2[l]*(cost[l+1] > 0.0f ? cost[l+1] : cost[l])
+                     / ((1.0f-theta)*eps*eps);
           else
-            std_cost = var2[2*L]*Cl[l+1] / ((1.0f-theta)*eps*eps);
+            std_cost = var2[2*L]*(Cl[l+1] > 0.0f ? Cl[l+1] : Cl[l])
+                     / ((1.0f-theta)*eps*eps);
 	}
       }
     }

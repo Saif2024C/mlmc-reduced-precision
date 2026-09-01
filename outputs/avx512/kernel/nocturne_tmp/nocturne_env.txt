@@ -1,0 +1,5 @@
+ 22:05:52 up 14 days, 22:36, 10 users,  load average: 9.56, 9.45, 9.45
+Model name:                              Intel(R) Xeon(R) 6737P
+Thread(s) per core:                      2
+Core(s) per socket:                      32
+Socket(s):                               2

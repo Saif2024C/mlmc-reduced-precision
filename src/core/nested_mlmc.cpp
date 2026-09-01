@@ -264,12 +264,18 @@ approximate simulations and only a few expensive correction samples.
     // 5.96 × 10⁻⁸. Any number smaller than this will underflow to zero
     
     for (int l=0; l<=2*L+1; l++) {
-      ml[l] = fabs(suml[1][l]/suml[0][l]); //sample mean. 
+      ml[l] = fabs(suml[1][l]/suml[0][l]); //sample mean.
       // E[Y]^2 - E[Y^2]
-      Vl[l] = fmaxf(suml[2][l]/suml[0][l] - ml[l]*ml[l], 0); 
+      // Floor at 1e-10, not 0: pure fp32 compares fp32 with fp32 on identical
+      // draws, so its odd levels have a correction that is identically zero.
+      // nested_mlmc_test.cpp floors var1/var2 the same way.
+      Vl[l] = fmaxf(suml[2][l]/suml[0][l] - ml[l]*ml[l], 1e-10f);
       if (gamma_0 <= 0.0f) Cl[l] = NlCl[l] / suml[0][l];
 
-      if (l>3) {
+      // This is the adaptive scheme's odd levels
+      // above the cutoff, where the path is FP32 throughout and no precision
+      // correction exists, and pure FP32's odd levels everywhere.
+      if (l>3 && NlCl[l] > 0.0) {
         ml[l] = fmaxf(ml[l],  0.5f*ml[l-2]/powf(2.0f,alpha));
         Vl[l] = fmaxf(Vl[l],  0.5f*Vl[l-2]/powf(2.0f,beta));
       }
@@ -278,7 +284,12 @@ approximate simulations and only a few expensive correction samples.
     }
 
     for (int l=0; l<=2*L+1; l++) {
-      dNl[l] = ceilf( fmaxf( 0.0f, 
+      // A level sitting exactly on the variance floor has a correction that is
+      // identically zero -- pure fp32's odd levels, where both chains are fp32
+      // on the same draws.  There is nothing to estimate, so request no
+      // further samples rather than the token one ceilf() would round up to.
+      if (Vl[l] <= 1e-10f) { dNl[l] = 0; continue; }
+      dNl[l] = ceilf( fmaxf( 0.0f,
                        sqrtf(Vl[l]/Cl[l])*sum/((1.0f-theta)*eps*eps)
                      - suml[0][l] ) );
     }
@@ -351,10 +362,12 @@ approximate simulations and only a few expensive correction samples.
 
           sum = 0.0f;
           for (int l=0; l<=2*L+1; l++) sum += sqrtf(Vl[l]*Cl[l]);
-          for (int l=0; l<=2*L+1; l++)
-            dNl[l] = ceilf( fmaxf( 0.0f, 
+          for (int l=0; l<=2*L+1; l++) {
+            if (Vl[l] <= 1e-10f) { dNl[l] = 0; continue; }   // see above
+            dNl[l] = ceilf( fmaxf( 0.0f,
                             sqrtf(Vl[l]/Cl[l])*sum/((1.0f-theta)*eps*eps)
                           - suml[0][l] ) );
+          }
         }
       }
     }
@@ -366,6 +379,9 @@ approximate simulations and only a few expensive correction samples.
 
   float P = 0.0f;
   for (int l=0; l<=2*L+1; l++) {
+    // A level the convergence loop never sampled contributes nothing to the
+    // estimator; forming 0/0 here would make the returned value NaN.
+    if (suml[0][l] == 0.0) { Nl[l] = 0; Cl[l] = 0.0f; continue; }
     P    += suml[1][l]/suml[0][l];
     Nl[l] = suml[0][l];
     Cl[l] = NlCl[l] / Nl[l];

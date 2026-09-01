@@ -37,7 +37,7 @@ SCHEMES = [
     ("nokahan",  "fp16, no Kahan",      "#c0392b", "o", "-"),
     ("kahan",    "fp16, Kahan",         "#e8a33d", "s", "-"),
     ("adaptive", "adaptive",            "#7d3c98", "^", "-"),
-    ("puref32",  "pure fp32",           "#1e8449", "D", "-"),
+    ("puref32",  "pure fp32 (non-nested MLMC)", "#1e8449", "D", "-"),
 ]
 
 
@@ -85,10 +85,22 @@ def main():
     opt       = sys.argv[3]
     eps_alloc = float(sys.argv[4]) if len(sys.argv) > 4 else 0.01
 
+    # adaptive cutoff: scalar Asian 5, everything else 6 (see CLAUDE.md)
+    kstar = 5 if (domain, opt) == ("scalar", "1") else 6
+
     data = {}
     for mode, label, colour, marker, ls in SCHEMES:
-        path = os.path.join(
-            directory, f"nested_{domain}_fp16_avx512_{mode}_{opt}.txt")
+        if mode == "puref32":
+            # The pure-fp32 reference is STANDARD (non-nested) MLMC, built by
+            # std_mlmc_fp32_<domain>_avx512.cpp and kept in its own directory:
+            # it is not a mode of the nested sweep.  Its N_l is indexed by
+            # grid level already, not by super-level.
+            path = os.path.join(
+                os.path.dirname(directory.rstrip("/")), "stdmlmc",
+                f"std_mlmc_fp32_{domain}_{opt}.txt")
+        else:
+            path = os.path.join(
+                directory, f"nested_{domain}_fp16_avx512_{mode}_{opt}.txt")
         rows = parse_complexity(path)
         if rows is None:
             print(f"  missing: {path}")
@@ -145,20 +157,48 @@ def main():
         if abs(row["eps"] - eps_alloc) > 1e-9:
             print(f"  {mode}: nearest eps is {row['eps']}, not {eps_alloc}")
         Nl = row["Nl"]
-        even = [(l // 2, n) for l, n in enumerate(Nl) if l % 2 == 0]
-        odd  = [(l // 2, n) for l, n in enumerate(Nl) if l % 2 == 1]
-        for ax, series in ((axes[0], even), (axes[1], odd)):
+        if mode == "puref32":
+            # Non-nested: one correction per grid level, so N_l is already
+            # indexed by k and there are no odd super-levels to show.
+            panels = [(axes[0], list(enumerate(Nl)))]
+        else:
+            even = [(l // 2, n) for l, n in enumerate(Nl) if l % 2 == 0]
+            odd  = [(l // 2, n) for l, n in enumerate(Nl) if l % 2 == 1]
+            # Above its cutoff the adaptive scheme is standard non-nested MLMC:
+            # the path is fp32 throughout, so no precision correction exists
+            # and those odd levels are not run.  They still appear in the
+            # driver's N_l array holding the pilot samples it allocated before
+            # the level was known to be empty, so they are trimmed here rather
+            # than drawn as if they carried a correction.
+            if mode == "adaptive" and kstar is not None:
+                odd = [(k, n) for k, n in odd if k < kstar]
+            panels = [(axes[0], even), (axes[1], odd)]
+        for ax, series in panels:
             ax.semilogy([k for k, _ in series], [n for _, n in series], ls,
                         color=colour, marker=marker, markersize=6, label=label)
         plotted = True
 
     if plotted:
-        axes[0].set_title("Milstein correction (even $l=2k$)")
+        # The left panel carries the Milstein correction, which every scheme
+        # has: for the nested ones it is the even super-level, for non-nested
+        # pure fp32 it is simply level k.  Only the right panel is specific to
+        # the super-level construction.
+        axes[0].set_title("Milstein correction")
         axes[1].set_title("precision correction (odd $l=2k+1$)")
         axes[0].set_ylabel(r"samples  $N_l$")
         for ax in axes:
             ax.set_xlabel(r"grid level  $k$")
             ax.grid(True, which="both", alpha=0.3)
+            # Gridlines default to drawing OVER the data, which greys out the
+            # k* rule where a gridline coincides with it.
+            ax.set_axisbelow(True)
+            # k* is where the adaptive scheme switches to fp32: below it the
+            # precision correction exists, at and above it there is none.
+            ax.axvline(kstar, color="#1f5fb4", ls=(0, (5, 2)), lw=1.1,
+                       zorder=2.5)
+            ax.text(kstar, 0.97, rf"  $k^{{*}}={kstar}$",
+                    transform=ax.get_xaxis_transform(),
+                    va="top", ha="left", fontsize=9, color="#1f5fb4")
         axes[0].legend(frameon=False)
         fig.suptitle(f"{domain.capitalize()} {payoff}: "
                      rf"sample allocation at $\varepsilon={eps_alloc}$")

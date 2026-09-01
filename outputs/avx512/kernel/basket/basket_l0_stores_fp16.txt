@@ -1,0 +1,24 @@
+=== store-side counters ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  53.4738 ms   12.75 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            270.80 msec task-clock                       #    0.995 CPUs utilized             
+       736,885,973      cycles                           #    2.721 GHz                       
+       896,254,204      instructions                     #    1.22  insn per cycle            
+       126,451,527      L1-dcache-loads                  #  466.954 M/sec                     
+        25,800,058      L1-dcache-stores                 #   95.273 M/sec                     
+        25,800,058      mem_inst_retired.all_stores      #   95.273 M/sec                     
+           350,397      resource_stalls.sb               #    1.294 M/sec                     
+
+       0.272269139 seconds time elapsed
+
+       0.269065000 seconds user
+       0.002989000 seconds sys
+
+

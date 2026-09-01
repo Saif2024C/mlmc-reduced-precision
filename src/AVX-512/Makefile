@@ -99,6 +99,8 @@ kb_basket_l0: performance_analysis/kernel_bench_basket_l0.cpp $(DEPS)
 	$(CXX) $(CXXFLAGS) $< -o $@
 kb_basket_l0_omp: performance_analysis/kernel_bench_basket_l0.cpp $(DEPS)
 	$(CXX) $(CXXFLAGS) $(OMPFLAGS) $< -o $@
+kb_scalar_asian_l0: performance_analysis/kernel_bench_scalar_asian_l0.cpp $(DEPS)
+	$(CXX) $(CXXFLAGS) $< -o $@
 
 # Serial timing across the driver's own level-0 sample counts (one row per
 # eps in {0.2,0.1,0.05,0.02,0.01}), with throughput and the correctness
@@ -154,6 +156,57 @@ L1-dcache-loads,L1-dcache-load-misses,l2_rqsts.miss \
 	perf stat -e task-clock,cycles,instructions,LLC-loads,LLC-load-misses \
 	  ./kb_basket_l0 --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
 	} | tee $(OUT)/kernel/basket_l0_perf_$(KERNEL).txt
+
+# Store-side counters (Giles, 2026-08-24). kbench_perf collects L1-dcache-loads
+# but NO store event, so Table 4.4 shows 157 load uops/path against 62 arith
+# instructions/path in fp32 without being able to say whether the excess loads
+# are spill reloads. A spill is a store followed by a reload, so if the excess
+# is spillage the store count should be comparable in magnitude to it; if
+# stores come back near zero the loads are read-only data (Philox constants,
+# the Cholesky matrix, SVML tables) and the spill reading is wrong.
+#
+# Store bandwidth is half load bandwidth on this core (2 loads/cycle vs 1
+# store/cycle), so counts must be converted to port pressure before comparing:
+# loads/2 against stores/1. Stores can dominate while being fewer.
+#
+# resource_stalls.sb (store-buffer full) is the direct test of whether stores
+# actually cost cycles rather than just being issued. mem_inst_retired.all_stores
+# is collected alongside L1-dcache-stores as a cross-check, since the two count
+# slightly different things (retired store uops vs L1 store accesses) and a
+# large disagreement would mean one of them is not measuring what we think.
+#
+# One pass: five events fit the PMU counters without multiplexing. Same
+# task-clock,cycles,instructions preamble as the other passes so the run can be
+# checked for comparability against them.
+kbench_stores: kb_basket_l0
+	@mkdir -p $(OUT)/kernel
+	@{ echo "=== store-side counters ==="; \
+	perf stat -e task-clock,cycles,instructions,\
+L1-dcache-loads,L1-dcache-stores,mem_inst_retired.all_stores,resource_stalls.sb \
+	  ./kb_basket_l0 --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
+	} | tee $(OUT)/kernel/basket_l0_stores_$(KERNEL).txt
+
+# Non-memory IPC (Giles, 2026-08-25): "can you restrict IPC to non-memory
+# instructions?".  Subtracting L1-dcache-loads/stores from `instructions`
+# mixes units -- those are uop counters, `instructions` is an instruction
+# counter, so a fused load+op is 1 instruction but 1 load uop and the
+# subtraction over-removes.  mem_inst_retired.all_loads/.all_stores are
+# INSTRUCTION-retired counters, so (instructions - all_loads - all_stores)
+# is unit-consistent and non-memory IPC is quotable without a caveat.
+#
+# L1-dcache-* are collected alongside in the same pass so the two definitions
+# can be compared directly on identical runs: all_stores already matched
+# L1-dcache-stores exactly (231,147,044) in the kbench_stores run, so if
+# all_loads likewise matches L1-dcache-loads the earlier subtraction needs no
+# correction.  Six events, one pass, no multiplexing.
+kbench_nonmem: kb_basket_l0
+	@mkdir -p $(OUT)/kernel
+	@{ echo "=== non-memory IPC counters ==="; \
+	perf stat -e task-clock,cycles,instructions,\
+mem_inst_retired.all_loads,mem_inst_retired.all_stores,\
+L1-dcache-loads,L1-dcache-stores \
+	  ./kb_basket_l0 --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
+	} | tee $(OUT)/kernel/basket_l0_nonmem_$(KERNEL).txt
 
 # VTune uarch-exploration for one kernel (richer than perf: port utilisation,
 # retiring/bad-spec/backend breakdown).
@@ -297,5 +350,53 @@ pull:
 	  scp "$(REMOTE):$(REMOTEROOT)/outputs/avx512/scaling/$$pat" $(LOCALROOT)/outputs/avx512/scaling/; \
 	done
 
+# Every counter pass, both kernels, one invocation, into ONE file (2026-08-28).
+# The passes were previously run on separate occasions, so Table 4.4's clock
+# (~2.70 GHz) and the non-memory IPC pass's clock (~2.00 GHz) came from
+# differently loaded machines and the two tables' IPC figures did not agree.
+# Counts are ratios and survive that; IPC is a rate and does not.  Taking every
+# pass back to back makes the absolute frequency irrelevant, since all rows
+# then share it.  Ordering is fp32 then fp16 within each pass rather than all
+# passes per kernel, so any drift over the session hits both sides of a
+# comparison equally.  Every pass prints task-clock/cycles/instructions, so the
+# single output file carries its own comparability check.
+# BENCH selects which level-0 kernel binary to profile, so the scalar Asian
+# appendix data comes from exactly the passes Chapter 4's basket table does.
+BENCH ?= kb_basket_l0
+kbench_allcounters: $(BENCH)
+	@mkdir -p $(OUT)/kernel
+	@{ echo "AVX-512 kernel counters -- $(BENCH) level 0"; \
+	   echo "all passes, both kernels, one session"; \
+	   date; uptime; echo; \
+	   for k in fp32 fp16; do \
+	     echo "################ SIMD / instruction mix -- $$k"; \
+	     perf stat -e task-clock,cycles,instructions,\
+fp_arith_inst_retired.512b_packed_single,fp_arith_inst_retired.256b_packed_single,\
+fp_arith_inst_retired2.512b_packed_half,fp_arith_inst_retired2.256b_packed_half \
+	       ./$(BENCH) --kernel $$k $(if $(NPATHS),--n $(NPATHS),) 2>&1; echo; \
+	   done; \
+	   for k in fp32 fp16; do \
+	     echo "################ L1 / L2 -- $$k"; \
+	     perf stat -e task-clock,cycles,instructions,\
+L1-dcache-loads,L1-dcache-load-misses,l2_rqsts.miss \
+	       ./$(BENCH) --kernel $$k $(if $(NPATHS),--n $(NPATHS),) 2>&1; echo; \
+	   done; \
+	   for k in fp32 fp16; do \
+	     echo "################ store side -- $$k"; \
+	     perf stat -e task-clock,cycles,instructions,\
+L1-dcache-loads,L1-dcache-stores,mem_inst_retired.all_stores,resource_stalls.sb \
+	       ./$(BENCH) --kernel $$k $(if $(NPATHS),--n $(NPATHS),) 2>&1; echo; \
+	   done; \
+	   for k in fp32 fp16; do \
+	     echo "################ non-memory IPC -- $$k"; \
+	     perf stat -e task-clock,cycles,instructions,\
+mem_inst_retired.all_loads,mem_inst_retired.all_stores,\
+L1-dcache-loads,L1-dcache-stores \
+	       ./$(BENCH) --kernel $$k $(if $(NPATHS),--n $(NPATHS),) 2>&1; echo; \
+	   done; \
+	   echo "################ timing"; \
+	   ./$(BENCH) --sweep $(if $(REPS),--reps $(REPS),) 2>&1; \
+	 } | tee $(OUT)/kernel/$(BENCH)_allcounters.txt
+
 .PHONY: all omp everything mkl run run_omp scaling scaling_csv speedup push pull kpull clean \
-        kbench kbench_perf kbench_vtune kbench_scaling coupling_test
+        kbench kbench_perf kbench_vtune kbench_scaling kbench_allcounters coupling_test

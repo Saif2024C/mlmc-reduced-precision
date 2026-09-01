@@ -10,7 +10,12 @@ The five series, all Var[Pf-Pc] on a log axis against grid level k:
   even super-levels (l=2k, the Milstein MLMC correction)
     fp16, no Kahan      -- plain += accumulation; the baseline that breaks
     fp16, Kahan         -- compensated summation; bounded, real decay
-    Pure fp32           -- the reference; classical beta ~ 2 straight line
+    Pure fp32           -- the reference; classical beta ~ 2 straight line.
+                           This is STANDARD (non-nested) MLMC, read from
+                           ../stdmlmc/std_mlmc_fp32_<domain>_<opt>.txt, not a
+                           mode of the nested sweep: with a single precision
+                           there is no precision correction to make, so the
+                           odd super-levels do not exist for it.
 
   odd super-levels (l=2k+1, the fp32-minus-fp16 precision correction)
     fp32-fp16 gap, no Kahan
@@ -155,14 +160,29 @@ def main():
         return os.path.join(
             d, f"nested_{domain}_fp16_avx512_{mode}_{opt}.txt")
 
-    modes = ["nokahan", "kahan", "puref32", "adaptive"]
+    # The pure-fp32 reference is STANDARD (non-nested) MLMC, produced by
+    # std_mlmc_fp32_{domain}_avx512.cpp, so its level column is already the
+    # grid level k rather than a super-level index.  It lives in its own
+    # directory since it is not part of the nested sweep.
+    std_path = os.path.join(
+        os.path.dirname(d.rstrip("/")), "stdmlmc",
+        f"std_mlmc_fp32_{domain}_{opt}.txt")
+
+    modes = ["nokahan", "kahan"]
     missing = [m for m in modes if not os.path.exists(path(m))]
+    if not os.path.exists(std_path):
+        missing.append(f"puref32 ({std_path})")
     if missing:
         print(f"error: missing required file(s) for mode(s): {', '.join(missing)}")
         print(f"       looked in {d}")
         sys.exit(1)
 
     data = {m: read_levels(path(m)) for m in modes}
+    # Re-index k -> super-level 2k so even_series() recovers k unchanged, and
+    # odd_series() finds nothing: non-nested MLMC has no precision correction.
+    std_lev, std_var = read_levels(std_path)
+    data["puref32"] = (2 * std_lev, std_var)
+    modes = ["nokahan", "kahan", "puref32"]
     N = sample_count(path("kahan"))
 
     # single-column journal proportions (~golden ratio); scales down cleanly
@@ -175,7 +195,6 @@ def main():
     C_FP32    = "#0f7b3e"   # green
     C_GAP_NK  = "#8c564b"   # brown
     C_GAP_K   = "#7048a8"   # purple
-    C_ADAPT   = "#000000"   # black: overlays the two curves it switches between
 
     # --- even levels: the MLMC correction variance, one curve per precision --
     # Filled markers = the estimator's own variance.
@@ -185,17 +204,11 @@ def main():
         "kahan":   dict(color=C_KAHAN,   marker="s", ls="-",
                         label=r"fp16, Kahan"),
         "puref32": dict(color=C_FP32,    marker="D", ls="-",
-                        label=r"pure fp32 (all levels)"),
-        # Adaptive coincides with Kahan below k* and with fp32 above it, so it
-        # is drawn on top as a thin dashed line rather than a fourth solid one.
-        "adaptive": dict(color=C_ADAPT,  marker="", ls=(0, (5, 2)),
-                         label=r"adaptive"),
+                        label=r"pure fp32 (non-nested MLMC)"),
     }
     for m in modes:
         k, v = even_series(*data[m])
-        z = 5 if m == "adaptive" else 3
-        w = 1.1 if m == "adaptive" else 1.3
-        ax.semilogy(k, v, ms=4.2, lw=w, mew=0.6, zorder=z, **style[m])
+        ax.semilogy(k, v, ms=4.2, lw=1.3, mew=0.6, zorder=3, **style[m])
 
     # --- odd levels: the fp32-minus-fp16 precision-correction variance -------
     # Hollow markers + dashes: a different quantity from the curves above, so
@@ -205,10 +218,8 @@ def main():
                         label=r"fp32$-$fp16 (precision correction), no Kahan"),
         "kahan":   dict(color=C_GAP_K,  marker="v", ls=(0, (4, 1.6)),
                         label=r"fp32$-$fp16 (precision correction), Kahan"),
-        "adaptive": dict(color=C_ADAPT, marker="", ls=(0, (1, 1.6)),
-                         label=r"precision correction, adaptive"),
     }
-    for m in ["nokahan", "kahan", "adaptive"]:
+    for m in ["nokahan", "kahan"]:
         k, v = odd_series(*data[m])
         ax.semilogy(k, v, ms=4.2, lw=1.1, mfc="white", mew=0.9, zorder=2,
                     **gap_style[m])

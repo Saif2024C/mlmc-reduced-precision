@@ -1,15 +1,15 @@
 #ifndef MODES_MM512_H
 #define MODES_MM512_H
 ////////////////////////////////////////////////////////////////////////////
-// modes_mm512.h -- the four-mode precision sweep shared by the AVX-512 fp16
+// modes_mm512.h -- the three-mode precision sweep shared by the AVX-512 fp16
 // estimators, and the runtime switches those modes set.
 //
 // SEPARATE FROM options_mm512.h ON PURPOSE.  options_mm512.h is the reusable
 // numerics library -- Milstein steps, bridges, payoffs, Kahan summation --
 // and a new payoff can be written against it alone.  This header is the
-// experiment scaffolding built on top: the nokahan/kahan/adaptive/puref32
+// experiment scaffolding built on top: the nokahan/kahan/adaptive
 // comparison, its file naming, and its Eps[] policy.  Include it only if you
-// want that specific four-mode study; ignore it entirely otherwise and call
+// want that specific three-mode study; ignore it entirely otherwise and call
 // mlmc_test() yourself.
 //
 // ---------------------------------------------------------------------------
@@ -39,10 +39,10 @@
 //          cfg.eps          = my_eps;                      // 0-terminated
 //          return run_sweep(cfg, argc, argv);
 //
-//      Writes <prefix>_<mode>_<option>.txt for each of the 4 modes x 2 options.
+//      Writes <prefix>_<mode>_<option>.txt for each of the 3 modes x 2 options.
 //
 // ---------------------------------------------------------------------------
-// THE FOUR MODES
+// THE THREE MODES
 // ---------------------------------------------------------------------------
 //   nokahan  : plain += accumulation.  Convergence table only -- beta is
 //              often non-positive here, and mlmc_test's adaptive complexity
@@ -50,11 +50,18 @@
 //              Eps[] array is replaced by a zero terminator.
 //   kahan    : Kahan-compensated accumulation.  beta positive, so the real
 //              complexity test runs against the caller's Eps[].
-//   adaptive : Kahan below grid level l_star, pure fp32 at/above it.
-//   puref32  : adaptive with l_star=0, so the pure-fp32 branch fires at EVERY
-//              level -- an all-fp32 reference curve on the SAME Philox RNG as
-//              the other three, so an overlay comparison is not confounded by
-//              a different RNG family.
+//   adaptive : Kahan below grid level l_star, pure fp32 at/above it.  Above
+//              the cutoff the odd super-levels carry no precision correction
+//              and are not run, so the scheme is standard non-nested MLMC
+//              there.
+//
+// The pure-fp32 reference is NOT a mode here.  It used to be run as `adaptive`
+// with l_star=0, which put the whole nested ladder in fp32 -- but a nested
+// ladder with a single working precision has nothing for its odd super-levels
+// to correct, so that was never the right reference.  The reference is
+// ordinary MLMC in fp32, built by std_mlmc_fp32_{scalar,basket}_avx512.cpp,
+// which reuses the estimators below (and so the same Philox stream and the
+// same payoff) on a single-correction-per-grid-level ladder.
 ////////////////////////////////////////////////////////////////////////////
 
 // run_sweep() calls mlmc_test(), so this header must be included AFTER
@@ -81,9 +88,10 @@ extern int option;
 static bool kahan_mode = false;
 
 // At/above grid level l_star, even levels run the pure-fp32 chain instead of
-// fp16, and odd levels run fp32 twice on the same draws as a self-consistency
-// check.  Below l_star the fp16 chain is unchanged.  Only ever paired with
-// kahan_mode = true.
+// fp16, and odd levels are not run at all: with the path in fp32 throughout
+// there is no precision correction to make, so the scheme is standard
+// non-nested MLMC above the cutoff.  Below l_star the fp16 chain is unchanged.
+// Only ever paired with kahan_mode = true.
 static bool adaptive_mode = false;
 static int  l_star = 0;
 
@@ -112,7 +120,7 @@ struct SweepConfig {
 };
 
 // ---------------------------------------------------------------------------
-// run_sweep: 4 modes x 2 options (or one option, with --option N).
+// run_sweep: 3 modes x 2 options (or one option, with --option N).
 // Returns EXIT_SUCCESS / EXIT_FAILURE, so main() can `return run_sweep(...)`.
 // ---------------------------------------------------------------------------
 static inline int run_sweep(const SweepConfig &cfg, int argc, char **argv)
@@ -126,20 +134,18 @@ static inline int run_sweep(const SweepConfig &cfg, int argc, char **argv)
         if (std::strcmp(argv[i], "--option") == 0 && i + 1 < argc)
             opt_lo = opt_hi = std::atoi(argv[++i]);
 
-    const bool  kahan_modes[4]   = { false, true, true,  true };
-    const bool  adapt_modes[4]   = { false, false, true, true };
-    const int   lstar_override[4] = { -1, -1, -1, 0 };   // -1 = use cfg.l_star
-    const char *mode_tag[4]      = { "nokahan", "kahan", "adaptive", "puref32" };
+    const bool  kahan_modes[3]   = { false, true, true };
+    const bool  adapt_modes[3]   = { false, false, true };
+    const char *mode_tag[3]      = { "nokahan", "kahan", "adaptive" };
 
     char filename[160];
 
-    for (int m = 0; m < 4; ++m) {
+    for (int m = 0; m < 3; ++m) {
         kahan_mode    = kahan_modes[m];
         adaptive_mode = adapt_modes[m];
 
         for (option = opt_lo; option <= opt_hi; ++option) {
-            l_star = (lstar_override[m] >= 0) ? lstar_override[m]
-                                              : cfg.l_star[option];
+            l_star = cfg.l_star[option];
 
             std::sprintf(filename, "%s_%s_%d.txt", cfg.prefix, mode_tag[m], option);
             FILE *fp = std::fopen(filename, "w");

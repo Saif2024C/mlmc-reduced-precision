@@ -1,0 +1,259 @@
+AVX-512 kernel counters -- kb_scalar_asian_l0 level 0
+all passes, both kernels, one session
+Fri 28 Aug 18:19:16 BST 2026
+ 18:19:16 up 92 days, 22:17, 12 users,  load average: 126.36, 126.18, 126.12
+
+################ SIMD / instruction mix -- fp32
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  42.0848 ms   10.03 ns/path  chk 5.620487
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp32':
+
+            212.60 msec task-clock                       #    0.993 CPUs utilized             
+       564,659,499      cycles                           #    2.656 GHz                       
+       843,325,449      instructions                     #    1.49  insn per cycle            
+        22,282,240      fp_arith_inst_retired.512b_packed_single #  104.810 M/sec                     
+        57,671,680      fp_arith_inst_retired.256b_packed_single #  271.272 M/sec                     
+                 0      fp_arith_inst_retired2.512b_packed_half #    0.000 /sec                      
+                 0      fp_arith_inst_retired2.256b_packed_half #    0.000 /sec                      
+
+       0.214054150 seconds time elapsed
+
+       0.210566000 seconds user
+       0.002993000 seconds sys
+
+
+
+################ SIMD / instruction mix -- fp16
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  22.5433 ms    5.37 ns/path  chk 5.618259
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp16':
+
+            115.32 msec task-clock                       #    0.992 CPUs utilized             
+       306,860,287      cycles                           #    2.661 GHz                       
+       327,643,487      instructions                     #    1.07  insn per cycle            
+                 0      fp_arith_inst_retired.512b_packed_single #    0.000 /sec                      
+                 0      fp_arith_inst_retired.256b_packed_single #    0.000 /sec                      
+        13,107,200      fp_arith_inst_retired2.512b_packed_half #  113.654 M/sec                     
+        17,039,360      fp_arith_inst_retired2.256b_packed_half #  147.751 M/sec                     
+
+       0.116220894 seconds time elapsed
+
+       0.115074000 seconds user
+       0.001000000 seconds sys
+
+
+
+################ L1 / L2 -- fp32
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  42.1068 ms   10.04 ns/path  chk 5.620487
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp32':
+
+            212.52 msec task-clock                       #    0.996 CPUs utilized             
+       564,473,539      cycles                           #    2.656 GHz                       
+       843,322,924      instructions                     #    1.49  insn per cycle            
+       238,703,112      L1-dcache-loads                  #    1.123 G/sec                     
+           143,908      L1-dcache-load-misses            #    0.06% of all L1-dcache accesses 
+            39,401      l2_rqsts.miss                    #  185.401 K/sec                     
+
+       0.213335998 seconds time elapsed
+
+       0.211230000 seconds user
+       0.002002000 seconds sys
+
+
+
+################ L1 / L2 -- fp16
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  22.6635 ms    5.40 ns/path  chk 5.618259
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp16':
+
+            115.46 msec task-clock                       #    0.992 CPUs utilized             
+       306,430,628      cycles                           #    2.654 GHz                       
+       327,602,025      instructions                     #    1.07  insn per cycle            
+        31,456,115      L1-dcache-loads                  #  272.432 M/sec                     
+            58,931      L1-dcache-load-misses            #    0.19% of all L1-dcache accesses 
+            36,321      l2_rqsts.miss                    #  314.566 K/sec                     
+
+       0.116411166 seconds time elapsed
+
+       0.114328000 seconds user
+       0.002005000 seconds sys
+
+
+
+################ store side -- fp32
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  41.8788 ms    9.98 ns/path  chk 5.620487
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp32':
+
+            211.55 msec task-clock                       #    0.995 CPUs utilized             
+       560,184,993      cycles                           #    2.648 GHz                       
+       843,232,778      instructions                     #    1.51  insn per cycle            
+       238,681,216      L1-dcache-loads                  #    1.128 G/sec                     
+       100,368,963      L1-dcache-stores                 #  474.443 M/sec                     
+       100,368,963      mem_inst_retired.all_stores      #  474.443 M/sec                     
+           432,500      resource_stalls.sb               #    2.044 M/sec                     
+
+       0.212677586 seconds time elapsed
+
+       0.209299000 seconds user
+       0.003004000 seconds sys
+
+
+
+################ store side -- fp16
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  22.6414 ms    5.40 ns/path  chk 5.618259
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp16':
+
+            115.43 msec task-clock                       #    0.992 CPUs utilized             
+       306,448,560      cycles                           #    2.655 GHz                       
+       327,633,624      instructions                     #    1.07  insn per cycle            
+        31,463,903      L1-dcache-loads                  #  272.583 M/sec                     
+           680,012      L1-dcache-stores                 #    5.891 M/sec                     
+           680,012      mem_inst_retired.all_stores      #    5.891 M/sec                     
+           261,355      resource_stalls.sb               #    2.264 M/sec                     
+
+       0.116318851 seconds time elapsed
+
+       0.116170000 seconds user
+       0.000000000 seconds sys
+
+
+
+################ non-memory IPC -- fp32
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  41.8285 ms    9.97 ns/path  chk 5.620487
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp32':
+
+            210.99 msec task-clock                       #    0.996 CPUs utilized             
+       560,352,533      cycles                           #    2.656 GHz                       
+       843,297,389      instructions                     #    1.50  insn per cycle            
+       238,696,528      mem_inst_retired.all_loads       #    1.131 G/sec                     
+       100,378,399      mem_inst_retired.all_stores      #  475.752 M/sec                     
+       238,696,528      L1-dcache-loads                  #    1.131 G/sec                     
+       100,378,399      L1-dcache-stores                 #  475.752 M/sec                     
+
+       0.211824966 seconds time elapsed
+
+       0.209712000 seconds user
+       0.001997000 seconds sys
+
+
+
+################ non-memory IPC -- fp16
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  22.6928 ms    5.41 ns/path  chk 5.618259
+
+ Performance counter stats for './kb_scalar_asian_l0 --kernel fp16':
+
+            115.37 msec task-clock                       #    0.991 CPUs utilized             
+       306,276,953      cycles                           #    2.655 GHz                       
+       327,626,763      instructions                     #    1.07  insn per cycle            
+        31,461,764      mem_inst_retired.all_loads       #  272.703 M/sec                     
+           679,190      mem_inst_retired.all_stores      #    5.887 M/sec                     
+        31,461,764      L1-dcache-loads                  #  272.703 M/sec                     
+           679,190      L1-dcache-stores                 #    5.887 M/sec                     
+
+       0.116378278 seconds time elapsed
+
+       0.114147000 seconds user
+       0.002002000 seconds sys
+
+
+
+################ timing
+Level-0 kernel benchmark -- SCALAR ASIAN (option 1)
+  RNG -> Milstein (1 step) -> trapezoid + bridge -> payoff
+  (pure Asian: the shipped l=0 branch also computes the Lookback
+   minimum and its log-uniform draw and discards them; that dead
+   work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+Level-0 sample counts N_0 as requested by the MLMC driver
+(scalar Asian, from the adaptive complexity table's N_l column)
+
+    eps       N_0 |  fp32(ms)  ns/path     Mp/s |  fp16(ms)  ns/path     Mp/s |  ratio
+  0.100      9939 |    0.1014    10.20    98.05 |    0.0548     5.51   181.43 |  1.85x
+  0.050     39576 |    0.4021    10.16    98.42 |    0.2098     5.30   188.65 |  1.92x
+  0.020    261431 |    2.5750     9.85   101.53 |    1.3940     5.33   187.54 |  1.85x
+  0.010   1083098 |   10.8861    10.05    99.49 |    5.8385     5.39   185.51 |  1.86x
+  0.005   4346538 |   43.5299    10.01    99.85 |   23.6092     5.43   184.10 |  1.84x
+
+  Correctness check (chk = mean discounted payoff):
+    eps       N_0 |    fp32 chk    fp16 chk       gap
+  0.100      9939 |    5.519134    5.588300  6.92e-02
+  0.050     39576 |    5.611353    5.640792  2.94e-02
+  0.020    261431 |    5.608032    5.614761  6.73e-03
+  0.010   1083098 |    5.633137    5.622938  1.02e-02
+  0.005   4346538 |    5.621374    5.619040  2.33e-03
+
+  ns/p = nanoseconds per path.  A flat ns/p column means the
+  kernel's efficiency is size-independent; a rising one means
+  something degrades as the trip count grows.  The two smallest
+  N_0 inflate ns/p in BOTH kernels -- per-call overhead not yet
+  amortised -- so quote eps <= 0.02 for the steady-state cost.

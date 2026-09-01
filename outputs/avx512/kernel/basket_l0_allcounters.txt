@@ -1,0 +1,232 @@
+AVX-512 kernel counters -- basket European level 0
+all passes, both kernels, one session
+Fri 28 Aug 17:07:03 BST 2026
+ 17:07:03 up 92 days, 21:05, 14 users,  load average: 126.41, 126.24, 121.73
+
+################ SIMD / instruction mix -- fp32
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 108.1650 ms   25.79 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            545.61 msec task-clock                       #    0.993 CPUs utilized             
+     1,448,826,494      cycles                           #    2.655 GHz                       
+     2,192,977,784      instructions                     #    1.51  insn per cycle            
+       115,703,808      fp_arith_inst_retired.512b_packed_single #  212.063 M/sec                     
+       144,629,760      fp_arith_inst_retired.256b_packed_single #  265.078 M/sec                     
+                 0      fp_arith_inst_retired2.512b_packed_half #    0.000 /sec                      
+                 0      fp_arith_inst_retired2.256b_packed_half #    0.000 /sec                      
+
+       0.549461120 seconds time elapsed
+
+       0.544229000 seconds user
+       0.003001000 seconds sys
+
+
+
+################ SIMD / instruction mix -- fp16
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  52.1598 ms   12.44 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            263.95 msec task-clock                       #    0.996 CPUs utilized             
+       700,597,398      cycles                           #    2.654 GHz                       
+       896,198,658      instructions                     #    1.28  insn per cycle            
+                 0      fp_arith_inst_retired.512b_packed_single #    0.000 /sec                      
+                 0      fp_arith_inst_retired.256b_packed_single #    0.000 /sec                      
+        32,870,400      fp_arith_inst_retired2.512b_packed_half #  124.535 M/sec                     
+       101,240,832      fp_arith_inst_retired2.256b_packed_half #  383.567 M/sec                     
+
+       0.264962598 seconds time elapsed
+
+       0.262886000 seconds user
+       0.001999000 seconds sys
+
+
+
+################ L1 / L2 -- fp32
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 107.9162 ms   25.73 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            543.75 msec task-clock                       #    0.998 CPUs utilized             
+     1,443,372,228      cycles                           #    2.654 GHz                       
+     2,192,823,828      instructions                     #    1.52  insn per cycle            
+       658,017,633      L1-dcache-loads                  #    1.210 G/sec                     
+           349,395      L1-dcache-load-misses            #    0.05% of all L1-dcache accesses 
+            46,980      l2_rqsts.miss                    #   86.400 K/sec                     
+
+       0.544820463 seconds time elapsed
+
+       0.541644000 seconds user
+       0.002998000 seconds sys
+
+
+
+################ L1 / L2 -- fp16
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  52.4701 ms   12.51 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            265.03 msec task-clock                       #    0.989 CPUs utilized             
+       702,142,439      cycles                           #    2.649 GHz                       
+       896,344,765      instructions                     #    1.28  insn per cycle            
+       126,476,783      L1-dcache-loads                  #  477.208 M/sec                     
+            85,074      L1-dcache-load-misses            #    0.07% of all L1-dcache accesses 
+            44,515      l2_rqsts.miss                    #  167.959 K/sec                     
+
+       0.268068241 seconds time elapsed
+
+       0.263067000 seconds user
+       0.003000000 seconds sys
+
+
+
+################ store side -- fp32
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 108.2769 ms   25.82 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            546.00 msec task-clock                       #    0.998 CPUs utilized             
+     1,448,513,213      cycles                           #    2.653 GHz                       
+     2,192,876,568      instructions                     #    1.51  insn per cycle            
+       658,028,403      L1-dcache-loads                  #    1.205 G/sec                     
+       231,145,539      L1-dcache-stores                 #  423.342 M/sec                     
+       231,145,539      mem_inst_retired.all_stores      #  423.342 M/sec                     
+         3,048,207      resource_stalls.sb               #    5.583 M/sec                     
+
+       0.547154493 seconds time elapsed
+
+       0.545039000 seconds user
+       0.002000000 seconds sys
+
+
+
+################ store side -- fp16
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  52.3248 ms   12.48 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            264.87 msec task-clock                       #    0.995 CPUs utilized             
+       701,467,045      cycles                           #    2.648 GHz                       
+       896,276,699      instructions                     #    1.28  insn per cycle            
+       126,460,361      L1-dcache-loads                  #  477.434 M/sec                     
+        25,803,622      L1-dcache-stores                 #   97.418 M/sec                     
+        25,803,622      mem_inst_retired.all_stores      #   97.418 M/sec                     
+           819,074      resource_stalls.sb               #    3.092 M/sec                     
+
+       0.266250710 seconds time elapsed
+
+       0.264851000 seconds user
+       0.000995000 seconds sys
+
+
+
+################ non-memory IPC -- fp32
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 108.2700 ms   25.81 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_basket_l0 --kernel fp32':
+
+            545.51 msec task-clock                       #    0.998 CPUs utilized             
+     1,446,102,331      cycles                           #    2.651 GHz                       
+     2,192,924,984      instructions                     #    1.52  insn per cycle            
+       658,039,820      mem_inst_retired.all_loads       #    1.206 G/sec                     
+       231,149,811      mem_inst_retired.all_stores      #  423.731 M/sec                     
+       658,039,820      L1-dcache-loads                  #    1.206 G/sec                     
+       231,149,811      L1-dcache-stores                 #  423.731 M/sec                     
+
+       0.546638172 seconds time elapsed
+
+       0.545457000 seconds user
+       0.000999000 seconds sys
+
+
+
+################ non-memory IPC -- fp16
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best  52.2238 ms   12.45 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0 --kernel fp16':
+
+            263.99 msec task-clock                       #    0.996 CPUs utilized             
+       700,835,160      cycles                           #    2.655 GHz                       
+       896,196,278      instructions                     #    1.28  insn per cycle            
+       126,439,500      mem_inst_retired.all_loads       #  478.952 M/sec                     
+        25,790,918      mem_inst_retired.all_stores      #   97.696 M/sec                     
+       126,439,500      L1-dcache-loads                  #  478.952 M/sec                     
+        25,790,918      L1-dcache-stores                 #   97.696 M/sec                     
+
+       0.265007051 seconds time elapsed
+
+       0.261921000 seconds user
+       0.002999000 seconds sys
+
+
+
+################ timing
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+Level-0 sample counts N_0 as requested by the MLMC driver
+(basket European, from the complexity table's N_l column)
+
+    eps       N_0 |  fp32(ms)  ns/path     Mp/s |  fp16(ms)  ns/path     Mp/s |  ratio
+  0.200      9704 |    0.2445    25.18    39.72 |    0.1182    12.17    82.14 |  2.07x
+  0.100     44758 |    1.1394    25.45    39.29 |    0.5563    12.43    80.47 |  2.05x
+  0.050    173030 |    4.4177    25.53    39.17 |    2.1283    12.30    81.30 |  2.08x
+  0.020   1169929 |   30.1841    25.80    38.76 |   14.5252    12.42    80.55 |  2.08x
+  0.010   4658857 |  120.3106    25.82    38.72 |   58.2078    12.49    80.04 |  2.07x
+
+  Correctness check (chk = mean discounted payoff):
+    eps       N_0 |    fp32 chk    fp16 chk       gap
+  0.200      9704 |   11.028137   11.202890  1.75e-01
+  0.100     44758 |   10.922562   11.060317  1.38e-01
+  0.050    173030 |   10.957273   10.984911  2.76e-02
+  0.020   1169929 |   10.970104   10.970738  6.34e-04
+  0.010   4658857 |   10.956032   10.949252  6.78e-03
+
+  ns/p = nanoseconds per path.  A flat ns/p column means the
+  kernel's efficiency is size-independent; a rising one means
+  something degrades as the trip count grows.  The two smallest
+  N_0 inflate ns/p in BOTH kernels -- per-call overhead not yet
+  amortised -- so quote eps <= 0.02 for the steady-state cost.

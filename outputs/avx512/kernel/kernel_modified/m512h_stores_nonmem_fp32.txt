@@ -1,0 +1,49 @@
+=== store-side counters ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 120.7983 ms   28.80 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_m512h --kernel fp32':
+
+            666.37 msec task-clock                       #    0.993 CPUs utilized             
+     1,333,423,154      cycles                           #    2.001 GHz                       
+     2,193,839,640      instructions                     #    1.65  insn per cycle            
+       658,300,412      L1-dcache-loads                  #  987.884 M/sec                     
+       231,341,165      L1-dcache-stores                 #  347.164 M/sec                     
+       231,341,165      mem_inst_retired.all_stores      #  347.164 M/sec                     
+           313,726      resource_stalls.sb               #  470.796 K/sec                     
+
+       0.670963450 seconds time elapsed
+
+       0.662956000 seconds user
+       0.004999000 seconds sys
+
+
+
+=== non-memory IPC counters ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best 120.7956 ms   28.80 ns/path  chk 10.957052
+
+ Performance counter stats for './kb_m512h --kernel fp32':
+
+            663.59 msec task-clock                       #    0.994 CPUs utilized             
+     1,333,383,185      cycles                           #    2.009 GHz                       
+     2,193,855,391      instructions                     #    1.65  insn per cycle            
+       658,304,084      mem_inst_retired.all_loads       #  992.039 M/sec                     
+       231,344,466      mem_inst_retired.all_stores      #  348.627 M/sec                     
+       658,304,084      L1-dcache-loads                  #  992.039 M/sec                     
+       231,344,466      L1-dcache-stores                 #  348.627 M/sec                     
+
+       0.667896027 seconds time elapsed
+
+       0.660112000 seconds user
+       0.004993000 seconds sys
+
+

@@ -262,6 +262,15 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
     // against) instead of returning a hardcoded zero.
     // ----------------------------------------------------------------------
     if (adaptive_mode && k >= l_star) {
+        // Above the cutoff the path is FP32 throughout, so the scheme is
+        // standard non-nested MLMC: one correction P_k - P_{k-1} per grid
+        // level, carried by the even super-level, and no precision correction
+        // at all.  The odd super-level therefore has no work to do.  It is
+        // returned empty rather than run: sums stay zero, so the driver's
+        // zero-variance guard allocates it no samples and it contributes
+        // nothing to the cost.
+        if (l % 2 == 1) return;
+
         for (int np = 0; np < N; ++np) {
             double dP, Pfv;
 

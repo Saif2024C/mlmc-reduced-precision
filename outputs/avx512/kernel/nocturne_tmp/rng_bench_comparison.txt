@@ -1,0 +1,45 @@
+RNG benchmark on nocturne (Xeon 6737P, load ~9.4) vs mimic (6538Y+, loaded)
+N = 33,600,000 AVX-512 vectors, same protocol.
+
+TABLE 2.2 -- same algorithm both sides (Philox), isolates delivery
+stage             threads |   mimic MKL  mimic ours |    noct MKL   noct ours
+uniform bits            1 |   2.930e+09   3.110e+09 |   1.292e+09   3.099e+09
+FP32 Normal             1 |   6.680e+08   6.350e+08 |   6.797e+08   5.858e+08
+FP16 Normal             1 |   4.450e+09   3.900e+09 |   4.589e+09   3.889e+09
+uniform bits           16 |   8.270e+09   1.560e+10 |   3.610e+09   1.015e+10
+FP32 Normal            16 |   5.010e+09   5.560e+09 |   4.762e+09   8.810e+09
+FP16 Normal            16 |   3.890e+10   3.420e+10 |   7.302e+10   6.237e+10
+
+SPEEDUP (ours / MKL):
+stage             threads      mimic   nocturne
+uniform bits            1       1.06       2.40
+FP32 Normal             1       0.95       0.86
+FP16 Normal             1       0.88       0.85
+uniform bits           16       1.87       2.81
+FP32 Normal            16       1.09       1.85
+FP16 Normal            16       0.88       0.85
+
+TABLE 2.3 -- uniform bits only, in-register vs other MKL generators
+MKL gen         threads      mimic   nocturne
+PHILOX                1       1.06       2.40
+PHILOX               16       2.11       2.81
+MT19937               1       0.60       1.86
+MT19937              16       1.34       2.48
+SFMT19937             1       0.57       1.49
+SFMT19937            16       1.10       2.00
+MCG59                 1       0.55       1.13
+MCG59                16       1.22       2.07
+
+KEY DIFFERENCES
+  1. In-register generator looks MUCH better on nocturne. On mimic it LOST
+     to all three cheap generators at 1 thread (0.55-0.60x); on nocturne it
+     WINS against every one at every thread count (1.13-2.81x).
+  2. Our raw uniform-bit rate is nearly identical on both machines
+     (3.10e9 vs 3.11e9 at 1 thread) -- it is MKL that is slower on nocturne
+     (1.29e9 vs 2.93e9), so the gap is MKL's, not ours.
+  3. FP32 Normal at 16 threads: 1.09x on mimic -> 1.85x on nocturne.
+  4. FP16 Normal is the one stage unchanged: 0.88 vs 0.85, MKL ahead on
+     both machines.
+
+CAVEAT: different CPU (Granite vs Emerald Rapids) AND different load.
+Cannot separate the two causes from these runs alone.

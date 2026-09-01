@@ -125,7 +125,13 @@ float mlmc(int Lmin, int Lmax, int N0, float eps,
 
     for (int l=0; l<=L; l++) {
       ml[l] = fabs(suml[1][l]/suml[0][l]);
-      Vl[l] = fmaxf(suml[2][l]/suml[0][l] - ml[l]*ml[l], 0.0f);
+      // Floor at 1e-10, not 0: a level whose correction vanishes by
+      // construction (puref32's odd levels compare fp32 with fp32 on
+      // identical draws) otherwise gives Vl[l] exactly 0, and the sample
+      // allocation and regression below divide or take logs through it.
+      // nested_mlmc_test.cpp floors var1/var2 the same way, so this keeps
+      // the driver and the test harness consistent.
+      Vl[l] = fmaxf(suml[2][l]/suml[0][l] - ml[l]*ml[l], 1e-10f);
       if (gamma_0 <= 0.0f) Cl[l] = NlCl[l] / suml[0][l];
 
       if (l>1) {

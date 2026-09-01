@@ -1,0 +1,68 @@
+================================================================================
+Thread scaling and core clock for the RNG benchmark
+Measured 2026-08-31 on nocturne (Intel Xeon 6737P, Granite Rapids,
+32 physical cores per socket, 2 threads per core)
+Build: icpx -O3 -march=native -std=c++17 -qopenmp -qmkl
+================================================================================
+
+
+RE-RUN ON NOCTURNE
+--------------------------------------------------------------------------------
+32 threads on the left, 1 thread on the right.
+
+fp32 Normal RNG tests:                    fp32 Normal RNG tests:
+max threads         =         32          max threads         =          1
+execution time (ms) =       1044          execution time (ms) =  1.892e+04
+32bit RNG/s         =  3.292e+10          32bit RNG/s         =  1.816e+09
+
+UniformBits32 RNG tests:                  UniformBits32 RNG tests:
+max threads         =         32          max threads         =          1
+execution time (ms) =      378.9          execution time (ms) =       7233
+32bit RNG/s         =  9.068e+10          32bit RNG/s         =  4.751e+09
+bandwidth (GB/s)    =      725.4          bandwidth (GB/s)    =         38
+
+UniformBits32/norminv_fp16 tests:         UniformBits32/norminv_fp16 tests:
+max threads         =         32          max threads         =          1
+execution time (ms) =      566.1          execution time (ms) =  1.038e+04
+16bit RNG/s         =  1.214e+11          16bit RNG/s         =  6.619e+09
+
+fp16 Normal RNG tests:                    fp16 Normal RNG tests:
+max threads         =         32          max threads         =          1
+execution time (ms) =      650.2          execution time (ms) =  1.321e+04
+16bit RNG/s         =  1.057e+11          16bit RNG/s         =  5.201e+09
+
+UniformBits32/gather_fp16 tests:          UniformBits32/gather_fp16 tests:
+max threads         =         32          max threads         =          1
+execution time (ms) =       1621          execution time (ms) =  3.046e+04
+16bit RNG/s         =  4.238e+10          16bit RNG/s         =  2.256e+09
+
+CPU utilisation     =  2954% (29.5 cores) CPU utilisation     =        99%
+
+
+SPEEDUPS FROM THE ABOVE
+--------------------------------------------------------------------------------
+phase                                1 thr(ms)  32 thr(ms)   speedup   % of 32
+--------------------------------------------------------------------------------
+fp32 Normal (MKL vsRngGaussian)          18920      1044.0     18.1x       57%
+UniformBits32                             7233       378.9     19.1x       60%
+UniformBits32 -> norminv_fp16            10380       566.1     18.3x       57%
+fp16 Normal (batched)                    13210       650.2     20.3x       63%
+UniformBits32 -> gather_fp16             30460      1621.0     18.8x       59%
+--------------------------------------------------------------------------------
+TOTAL wall clock                          80.4 s      4.43 s   18.1x       57%
+
+Every phase lands at 18-20x, i.e. 57-63% of the ideal 32x, including the
+pure-MKL fp32 Gaussian.  
+
+
+CORE CLOCK DURING EACH RUN
+--------------------------------------------------------------------------------
+Sampled from /proc/cpuinfo over the cores actually running the work, while the
+benchmark was executing.  
+
+The clock is the same at both thread counts -- marginally higher, if anything,
+with 32 cores loaded.  There is no boost-to-base drop to correct for, and both
+runs are already at ~3.8 GHz.
+
+
+

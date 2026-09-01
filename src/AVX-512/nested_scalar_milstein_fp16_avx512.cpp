@@ -185,6 +185,15 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
     // twice on the same draws -- a self-consistency check, not a real gap.
     
     if (adaptive_mode && k >= l_star) {
+        // Above the cutoff the path is FP32 throughout, so the scheme is
+        // standard non-nested MLMC: one correction P_k - P_{k-1} per grid
+        // level, carried by the even super-level, and no precision correction
+        // at all.  The odd super-level therefore has no work to do.  It is
+        // returned empty rather than run: sums stay zero, so the driver's
+        // zero-variance guard allocates it no samples and it contributes
+        // nothing to the cost.
+        if (l % 2 == 1) return;
+
         const FC32 cf32 = make_fc32(hf_f), cc32 = make_fc32(hc_f);
         const __m512 vsi32 = _mm512_set1_ps(si_f), vHalf32 = _mm512_set1_ps(0.5f);
         const __m512 vHf32 = _mm512_set1_ps(hf_f), vHc32 = _mm512_set1_ps(hc_f);
@@ -248,6 +257,12 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 // payoffs are kept side by side so each lane contributes its own diff.
                 alignas(64) float Pf_run[2][16], Pc_run[2][16];
                 for (int run = 0; run < 2; ++run) {
+                    // Reseed identically per run: `g` is shared, so without
+                    // this the second run continues the stream and the two
+                    // chains see DIFFERENT draws, making dP a difference of
+                    // two independent samples rather than the exact zero an
+                    // fp32-vs-fp32 check must give.
+                    rng_seed(g, (unsigned)((i0 >> 4) * 97 + l) + 1u);
                     __m512 Xf=vK32, Xc=vK32;
                     __m512 Af=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHf32,vK32));
                     __m512 Ac=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHc32,vK32));
@@ -557,9 +572,6 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 double dP_f = disc_f * (Pf_fine - Pf_cors);
                 // Y_l = fp32 correction - fp16 correction: pure rounding gap
                 double dP   = dP_f - dP_h;
-                // Pfv must be a PAYOFF value (fp16 convention, matching the
-                // even levels), not a precision gap -- see CLAUDE.md, the
-                // 2026-07-31 sums[5] unit-mismatch fix.
                 double Pfv  = (double)disc_h*Ph_fine;
                 // Cost 2*n_f: both precision chains are simulated
                 accum(dP, Pfv, 2.0*(double)nf);

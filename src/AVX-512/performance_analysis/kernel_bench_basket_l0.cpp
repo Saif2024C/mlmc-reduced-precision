@@ -3,12 +3,7 @@
 //
 // Performance_analysis.txt item 1a -- the real l=0 production kernel in
 // isolation, NOT the MLMC driver:  RNG -> Milstein -> terminal payoff.
-//
-// Both kernels are lifted VERBATIM from the l==0 branches of
-// nested_basket_milstein_fp16_avx512.cpp, so what is profiled is what ships;
-// re-sync if that file's l==0 branch changes.  European only: no Asian
-// running sum, no integral draw, no wdot bridge.  One batch = 16 lanes.
-//
+// 
 // N_0 per eps comes from the driver, so every row is a real workload.  `sink`
 // stops the loop being optimised away; `chk` (mean discounted payoff) catches
 // a fast-but-broken kernel -- both precisions must price the same option.
@@ -48,25 +43,7 @@
 //       chk = (1/N) sum_{p=1..N} P^{(p)}
 //
 //   over N independent paths, timing how long that takes in fp32 vs fp16.
-//
-// The five assets follow a correlated GBM under the risk-neutral measure
-//
-//       dS_i = r S_i dt + sigma_i S_i dW_i ,   d<W_i,W_j> = rho_ij dt
-//
-// with equicorrelation rho_ij = rho (i != j), 1 on the diagonal.  Correlated
-// increments are produced from independent Normals Z by the Cholesky factor
-// Sigma = L L^T:
-//
-//       dW = sqrt(h) * L Z ,      Z ~ N(0, I_5)
-//
-// The SDE is discretised by the MILSTEIN scheme, per asset:
-//
-//   S_i(t+h) = S_i(t) + r S_i h + sigma_i S_i dW_i
-//                     + (1/2) sigma_i^2 S_i ( dW_i^2 - h )
-//
-// This is the LEVEL-0 kernel of the MLMC hierarchy: n_f = 2^0 = 1 timestep,
-// so h = T and the whole path is ONE Milstein step -- there is no coarse
-// path, no fine/coarse difference Y = P_f - P_c, no running time-average.
+
 // Level 0 alone contributes E[P_0] to the MLMC telescoping sum, and it is
 // where the driver puts the overwhelming majority of its samples (N_0 is
 // 4.6M at eps=0.01), which is why isolating and profiling it is worthwhile.

@@ -1,0 +1,79 @@
+=== pass 1: SIMD / instruction mix ===
+Level-0 kernel benchmark -- SCALAR LOOKBACK (option 2)
+  RNG -> Milstein (1 step) -> bridge minimum (sqrt) -> payoff
+  (pure Lookback: the shipped l=0 branch also computes the Asian
+   integral and discards it; that dead work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  37.4532 ms    8.93 ns/path  chk 17.660799
+
+ Performance counter stats for './kb_scalar_l0 --kernel fp32':
+
+            250.29 msec task-clock                       #    0.991 CPUs utilized             
+       413,760,956      cycles                           #    1.653 GHz                       
+       691,351,862      instructions                     #    1.67  insn per cycle            
+        27,525,120      fp_arith_inst_retired.512b_packed_single #  109.971 M/sec                     
+        76,021,760      fp_arith_inst_retired.256b_packed_single #  303.731 M/sec                     
+                 0      fp_arith_inst_retired2.512b_packed_half #    0.000 /sec                      
+                 0      fp_arith_inst_retired2.256b_packed_half #    0.000 /sec                      
+
+       0.252538978 seconds time elapsed
+
+       0.247811000 seconds user
+       0.003996000 seconds sys
+
+
+
+
+=== pass 2: L1 / L2 ===
+Level-0 kernel benchmark -- SCALAR LOOKBACK (option 2)
+  RNG -> Milstein (1 step) -> bridge minimum (sqrt) -> payoff
+  (pure Lookback: the shipped l=0 branch also computes the Asian
+   integral and discards it; that dead work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  37.4608 ms    8.93 ns/path  chk 17.660799
+
+ Performance counter stats for './kb_scalar_l0 --kernel fp32':
+
+            247.72 msec task-clock                       #    0.994 CPUs utilized             
+       413,740,429      cycles                           #    1.670 GHz                       
+       691,356,541      instructions                     #    1.67  insn per cycle            
+       200,713,313      L1-dcache-loads                  #  810.238 M/sec                     
+            30,310      L1-dcache-load-misses            #    0.02% of all L1-dcache accesses 
+            45,729      l2_rqsts.miss                    #  184.598 K/sec                     
+
+       0.249270607 seconds time elapsed
+
+       0.246155000 seconds user
+       0.003001000 seconds sys
+
+
+
+
+=== pass 3: LLC ===
+Level-0 kernel benchmark -- SCALAR LOOKBACK (option 2)
+  RNG -> Milstein (1 step) -> bridge minimum (sqrt) -> payoff
+  (pure Lookback: the shipped l=0 branch also computes the Asian
+   integral and discards it; that dead work is stripped here)
+  threads = 1 (serial build)
+  reps    = 5 per timing
+
+fp32         N = 4194304     best  37.3694 ms    8.91 ns/path  chk 17.660799
+
+ Performance counter stats for './kb_scalar_l0 --kernel fp32':
+
+            248.21 msec task-clock                       #    0.993 CPUs utilized             
+       413,126,548      cycles                           #    1.664 GHz                       
+       691,430,799      instructions                     #    1.67  insn per cycle            
+            10,682      LLC-loads                        #   43.036 K/sec                     
+             4,704      LLC-load-misses                  #   44.04% of all LL-cache accesses  
+
+       0.249956648 seconds time elapsed
+
+       0.245634000 seconds user
+       0.003994000 seconds sys
+
+
