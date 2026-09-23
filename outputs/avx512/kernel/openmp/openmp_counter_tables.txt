@@ -1,0 +1,97 @@
+================================================================================
+OpenMP hardware counters for the level-0 kernel
+Basket European payoff, AVX-512, Intel Xeon Gold 6538Y+ (mimic)
+Measured 2026-09-23 in reply to two questions from Prof. Giles:
+  (i)  is there variation in the arithmetic instruction counts?
+  (ii) has perf been used with OpenMP multi-threaded applications?
+================================================================================
+
+
+        Quantity                          pass 1     pass 2     pass 3   Spread
+        FP-arithmetic instructions       260.3 M    260.3 M    260.3 M    0.000%
+        Total instructions             2 192.97 M 2 193.27 M 2 193.47 M   0.023%
+        Cycles                         1 520.1 M  1 720.7 M  1 780.5 M   14.6%
+        Elapsed time (s)                  0.565      0.627      0.664    14.8%
+
+Table 1: Three independent passes of the same serial FP32 binary,
+N = 4.19 x 10^6. The arithmetic count is exactly reproducible; cycles and
+elapsed time are not. FP-arithmetic is the sum of the 512b and 256b
+packed-single counters. The FP16 kernel behaves the same way: 134.1 M
+arithmetic instructions in every pass, total instructions varying by 0.049%,
+cycles by 15.0%.
+
+
+        Counter                              1 thread   32 threads   Change
+        512b packed single (FP32)          115 703 808  115 703 808   identical
+        256b packed single (FP32)          144 629 760  144 629 760   identical
+        512b packed half  (FP16)            32 870 400   32 870 400   identical
+        256b packed half  (FP16)           101 240 832  101 240 832   identical
+
+Table 2: Packed floating-point counters, serial build against the -qopenmp
+build at 32 threads, N = 4.19 x 10^6. Every count is bit-identical. The kernel
+performs a fixed amount of arithmetic over a fixed number of paths, and perf
+sums over the whole process tree, so threading divides the work without
+changing the total.
+
+
+        Quantity                            1 thread   32 threads     Ratio
+        Elapsed time (s)                       0.565        0.113   5.02x faster
+        Time per path (ns)                     26.22         2.00  13.11x faster
+        Total instructions                  2 192.97 M   2 402.93 M   9.6% more
+        FP-arithmetic instructions           260.3 M      260.3 M     unchanged
+        Cycles                              1 520.1 M    1 532.6 M     unchanged
+        IPC                                     1.44         1.57      higher
+        task-clock (ms)                        563.5      1 729.8   3.07x larger
+        L1 data-cache loads                  658.3 M      700.7 M     6.4% more
+        L1 data-cache stores                 231.4 M      244.5 M     5.7% more
+        L1 miss rate                           0.20%        0.06%       lower
+        L2 misses                              n/a         1.16 M        --
+
+Table 3: Serial against 32-thread FP32, N = 4.19 x 10^6. Threading adds
+instructions rather than removing them: thread setup, barriers and parallel-loop
+bookkeeping are all retired instructions the serial build never executes. The
+FP-arithmetic counters exclude that overhead, which is why they stay exact while
+the total does not. task-clock is CPU-time summed over threads, so it rises with
+the thread count while elapsed time falls; perf's derived "GHz" figure is
+therefore meaningless in threaded mode (it reported 0.886 GHz against a true
+~2.7 GHz) but IPC stays valid, both terms being process-wide totals.
+
+
+        Quantity                                  FP32          FP16
+        Threads                                     32            32
+        Total instructions                    319 504.0 M    77 862.6 M
+        Median per thread                       9 888.0 M     2 414.6 M
+        Minimum per thread                      9 828.0 M     2 341.9 M
+        Maximum per thread                     12 139.3 M     3 026.3 M
+        Threads within 2% of median               29 / 32       29 / 32
+
+Table 4: Per-thread breakdown at 32 threads, N = 6.71 x 10^7. The total divided
+by 32 is 9 984.5 M against a median of 9 888.0 M, so the work is split evenly
+between threads and not duplicated; the mean sits just above the median because
+of three outliers. Those outliers are elevated in both instructions and cycles
+while their IPC falls (1.49-1.60 against 1.64 for the rest), which is the
+signature of spin-waiting at a barrier: an idle thread still retires
+instructions while it spins. A larger N is used here than in Tables 1-3
+because perf's --per-thread mode can only attach to a running process, and at
+the smaller N the run finished before the attach completed.
+
+
+--------------------------------------------------------------------------------
+Reproducing
+--------------------------------------------------------------------------------
+From src/AVX-512/ on mimic, after sourcing /opt/intel/oneapi/setvars.sh:
+
+    make kbench_perf      KERNEL=fp32                        # serial, 3 passes
+    make kbench_perf_omp  KERNEL=fp32 OMPTHREADS=32         # threaded, 3 passes
+    make kbench_perf_omp_percpu KERNEL=fp32 OMPTHREADS=32 \
+         NPATHS=67108864 PERTHREAD_REPS=60                   # per-thread
+
+Both OpenMP targets pin threads with OMP_PLACES=cores and OMP_PROC_BIND=close so
+the counts are not disturbed by thread migration. perf stat -A was deliberately
+not used: it reports per-CPU rather than per-thread and requires system-wide
+mode, which would also count other users' work on this shared node.
+
+Output files:
+    basket_l0_perf_omp32_{fp32,fp16}.txt        Tables 2 and 3
+    basket_l0_perthread_omp32_{fp32,fp16}.txt   Table 4
+    ../basket/basket_l0_perf_{fp32,fp16}.txt    Table 1 and the serial columns
