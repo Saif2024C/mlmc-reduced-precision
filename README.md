@@ -65,19 +65,3 @@ MPLBACKEND=Agg python3 python/nested_mlmc_plot_python.py outputs/avx512/basket/n
 MPLBACKEND=Agg python3 python/nested_overlay_plot_python.py outputs/avx512/basket basket 1
 ```
 
-## Results
-
-Fitted variance decay exponent, measured on an Intel Xeon Gold 6538Y+
-(Emerald Rapids). The MLMC cost model requires this to exceed the cost growth
-exponent, which is 1 for these estimators.
-
-| Scheme | Basket European | Basket Asian | Scalar Asian |
-|---|---|---|---|
-| FP16, no compensation | 0.262 | -0.499 | -0.745 |
-| FP16, Kahan compensated | 1.089 | 1.036 | 0.824 |
-| Adaptive, FP16 below cut-off | 1.961 | 2.151 | 2.219 |
-| Pure FP32 (non-nested MLMC) | 1.929 | 2.138 | 2.189 |
-
-At matched sample counts the level-0 kernel runs 2.07x faster in FP16 with
-Kahan compensation than in FP32 for the basket European payoff, and 1.84x for
-the scalar Asian payoff.
