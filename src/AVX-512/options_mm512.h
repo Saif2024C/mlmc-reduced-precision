@@ -5,10 +5,10 @@
 // AVX-512 estimator and benchmark in this directory, in one place.
 //
 // TWO NAMESPACES, one per payoff family -- they share the Kahan accumulator
-// and nothing else (scalar has no Cholesky and no per-asset arrays; basket
-// has no Asian/Lookback bridge).  Each program uses the one it needs:
+// and nothing else (scalar has no Cholesky and no per-asset arrays).  Each
+// program uses the one it needs:
 //
-//   opt::scalar   1-asset GBM, Asian / Lookback    (sig scalar, min bridge)
+//   opt::scalar   1-asset GBM, Asian                (sig scalar)
 //   opt::basket   5-asset correlated GBM, European / Asian (Cholesky, weights)
 //
 // Include AFTER immintrin.h / avx512_rng.h (needs __m512, __m256h, _Float16).
@@ -64,12 +64,12 @@ static inline __m512  widen32(__m256h x) {
 }
 
 // ===========================================================================
-// scalar: 1-asset GBM,  option 1 = Asian, 2 = Lookback
+// scalar: 1-asset GBM,  option 1 = Asian
 // ===========================================================================
 namespace scalar {
 
-struct C32 { __m512  r, sig, halfsig2, hf, twohf, sqhf; };
-struct C16 { __m256h r, sig, halfsig2, hf, twohf; };
+struct C32 { __m512  r, sig, halfsig2, hf, sqhf; };
+struct C16 { __m256h r, sig, halfsig2, hf; };
 
 static inline C32 make32(float r, float sig, float h) {
     C32 c;
@@ -77,7 +77,6 @@ static inline C32 make32(float r, float sig, float h) {
     c.sig      = _mm512_set1_ps(sig);
     c.halfsig2 = _mm512_set1_ps(0.5f*sig*sig);
     c.hf       = _mm512_set1_ps(h);
-    c.twohf    = _mm512_set1_ps(2.0f*h);
     c.sqhf     = _mm512_set1_ps(std::sqrt(h));
     return c;
 }
@@ -87,7 +86,6 @@ static inline C16 make16(float r, float sig, _Float16 h) {
     c.sig      = _mm256_set1_ph((_Float16)sig);
     c.halfsig2 = _mm256_set1_ph((_Float16)(0.5f*sig*sig));
     c.hf       = _mm256_set1_ph(h);
-    c.twohf    = _mm256_set1_ph((_Float16)(2.0f*(float)h));
     return c;
 }
 
@@ -107,42 +105,17 @@ static inline __m256h mil_incr16(__m256h X, __m256h dW, const C16 &c) {
     return _mm256_add_ph(_mm256_add_ph(drift, diff), mil);
 }
 
-// Brownian-bridge minimum over one step (Lookback).  Lrv = log(U) < 0.
-static inline __m512 minbr32(__m512 M, __m512 X0, __m512 X1, __m512 v,
-                             __m512 Lrv, const C32 &c) {
-    __m512 d   = _mm512_sub_ps(X1, X0);
-    __m512 rad = _mm512_sub_ps(_mm512_mul_ps(d, d),
-                    _mm512_mul_ps(_mm512_mul_ps(c.twohf,
-                        _mm512_mul_ps(v, v)), Lrv));
-    __m512 mid = _mm512_mul_ps(_mm512_set1_ps(0.5f),
-                    _mm512_sub_ps(_mm512_add_ps(X0, X1), _mm512_sqrt_ps(rad)));
-    return _mm512_min_ps(M, mid);
-}
-static inline __m256h minbr16(__m256h M, __m256h X0, __m256h X1, __m256h v,
-                              __m256h Lrv, const C16 &c) {
-    __m256h d   = _mm256_sub_ph(X1, X0);
-    __m256h rad = _mm256_sub_ph(_mm256_mul_ph(d, d),
-                     _mm256_mul_ph(_mm256_mul_ph(c.twohf,
-                         _mm256_mul_ph(v, v)), Lrv));
-    __m256h mid = _mm256_mul_ph(_mm256_set1_ph((_Float16)0.5f),
-                     _mm256_sub_ph(_mm256_add_ph(X0, X1), _mm256_sqrt_ph(rad)));
-    return _mm256_min_ph(M, mid);
-}
-
 //
 // State is updated in place.  Af/Ac accumulate the Asian time-integral
-// (bridge term v*dI per fine step, and the coarse bridge dI0+dI1+0.25*hc*ddW);
-// Mf/Mc track the Lookback running minimum, the coarse one via a midpoint
-// reconstruction Xc1 so both fine sub-intervals are bridged.
+// (bridge term v*dI per fine step, and the coarse bridge dI0+dI1+0.25*hc*ddW).
 
-struct Pair32 { __m512 dW0, dW1, dI0, dI1, Lrv0, Lrv1; };
+struct Pair32 { __m512 dW0, dW1, dI0, dI1; };
 
 static inline void step_pair32(__m512 &Xf, __m512 &Xc, __m512 &Af, __m512 &Ac,
-                               __m512 &Mf, __m512 &Mc, const Pair32 &d,
+                               const Pair32 &d,
                                __m512 sig, __m512 hf, __m512 hc, __m512 q25hc,
                                const C32 &cf, const C32 &cc)
 {
-    const __m512 half = _mm512_set1_ps(0.5f);
     __m512 dWc = _mm512_add_ps(d.dW0, d.dW1);
     __m512 ddW = _mm512_sub_ps(d.dW0, d.dW1);
 
@@ -151,14 +124,12 @@ static inline void step_pair32(__m512 &Xf, __m512 &Xc, __m512 &Af, __m512 &Ac,
     Xf = _mm512_add_ps(Xa, mil_incr32(Xa, d.dW0, cf));
     Af = _mm512_add_ps(Af, _mm512_add_ps(_mm512_mul_ps(hf, Xf),
                                          _mm512_mul_ps(va, d.dI0)));
-    Mf = minbr32(Mf, Xa, Xf, va, d.Lrv0, cf);
 
     // fine step 2
     __m512 Xb = Xf, vb = _mm512_mul_ps(sig, Xb);
     Xf = _mm512_add_ps(Xb, mil_incr32(Xb, d.dW1, cf));
     Af = _mm512_add_ps(Af, _mm512_add_ps(_mm512_mul_ps(hf, Xf),
                                          _mm512_mul_ps(vb, d.dI1)));
-    Mf = minbr32(Mf, Xb, Xf, vb, d.Lrv1, cf);
 
     // coarse step, driven by dW0+dW1
     __m512 Xc0 = Xc, vc = _mm512_mul_ps(sig, Xc0);
@@ -167,10 +138,6 @@ static inline void step_pair32(__m512 &Xf, __m512 &Xc, __m512 &Af, __m512 &Ac,
                                _mm512_mul_ps(q25hc, ddW));
     Ac = _mm512_add_ps(Ac, _mm512_add_ps(_mm512_mul_ps(hc, nxc),
                                          _mm512_mul_ps(vc, cb)));
-    __m512 Xc1 = _mm512_mul_ps(half, _mm512_add_ps(_mm512_add_ps(Xc0, nxc),
-                                                   _mm512_mul_ps(vc, ddW)));
-    Mc = minbr32(Mc, Xc0, Xc1, vc, d.Lrv0, cf);
-    Mc = minbr32(Mc, Xc1, nxc, vc, d.Lrv1, cf);
     Xc = nxc;
 }
 
@@ -179,55 +146,45 @@ static inline void step_pair32(__m512 &Xf, __m512 &Xc, __m512 &Af, __m512 &Ac,
 //   * every state update goes through `acc`, so the caller passes
 //     kahan_accum16 or plain_accum16 and the compensation terms travel with
 //     the state
-struct Pair16 { __m256h dW0, dW1, dI0, dI1, Lrv0, Lrv1; };
+struct Pair16 { __m256h dW0, dW1, dI0, dI1; };
 
 template <class AccFn>
 static inline void step_pair16(__m256h &Xf, __m256h &Xc, __m256h &Af, __m256h &Ac,
-                               __m256h &Mf, __m256h &Mc,
                                __m256h &Xf_c, __m256h &Xc_c,
                                __m256h &Af_c, __m256h &Ac_c,
                                const Pair16 &d, AccFn acc,
                                __m256h sig, __m256h hf, __m256h hc, __m256h q25hc,
                                const C16 &cf, const C16 &cc)
 {
-    const __m256h half = _mm256_set1_ph((_Float16)0.5f);
-    __m256h dWc = _mm256_add_ph(d.dW0, d.dW1);
-    __m256h ddW = _mm256_sub_ph(d.dW0, d.dW1);
-
     // fine step 0
     __m256h Xa = Xf, va = _mm256_mul_ph(sig, Xa);
     acc(Xf, Xf_c, mil_incr16(Xa, d.dW0, cf));
     acc(Af, Af_c, _mm256_add_ph(_mm256_mul_ph(hf, Xf), _mm256_mul_ph(va, d.dI0)));
-    Mf = minbr16(Mf, Xa, Xf, va, d.Lrv0, cf);
 
     // fine step 1
     __m256h Xb = Xf, vb = _mm256_mul_ph(sig, Xb);
     acc(Xf, Xf_c, mil_incr16(Xb, d.dW1, cf));
     acc(Af, Af_c, _mm256_add_ph(_mm256_mul_ph(hf, Xf), _mm256_mul_ph(vb, d.dI1)));
-    Mf = minbr16(Mf, Xb, Xf, vb, d.Lrv1, cf);
 
     // coarse step, driven by dW0+dW1
     __m256h Xc0 = Xc, vc = _mm256_mul_ph(sig, Xc0);
+    __m256h ddW = _mm256_sub_ph(d.dW0, d.dW1);
+    __m256h dWc = _mm256_add_ph(d.dW0, d.dW1);
     acc(Xc, Xc_c, mil_incr16(Xc0, dWc, cc));
     __m256h cb = _mm256_add_ph(_mm256_add_ph(d.dI0, d.dI1),
                                _mm256_mul_ph(q25hc, ddW));
     acc(Ac, Ac_c, _mm256_add_ph(_mm256_mul_ph(hc, Xc), _mm256_mul_ph(vc, cb)));
-    __m256h Xc1 = _mm256_mul_ph(half, _mm256_add_ph(_mm256_add_ph(Xc0, Xc),
-                                                    _mm256_mul_ph(vc, ddW)));
-    Mc = minbr16(Mc, Xc0, Xc1, vc, d.Lrv0, cf);
-    Mc = minbr16(Mc, Xc1, Xc,  vc, d.Lrv1, cf);
 }
 
-// opt 1 = Asian (running average A), 2 = Lookback (terminal X, running min M).
-static inline double pay32(int o, float K, float A, float X, float M) {
-    return (o == 1) ? (double)std::fmax(0.0f, A - K) : (double)(X - M);
+// opt 1 = Asian (running average A).
+static inline double pay32(int o, float K, float A) {
+    (void)o;
+    return (double)std::fmax(0.0f, A - K);
 }
-static inline double pay16(int o, _Float16 K, _Float16 A, _Float16 X, _Float16 M) {
-    if (o == 1) {
-        _Float16 v = A - K;
-        return (double)(v > (_Float16)0.0f ? v : (_Float16)0.0f);
-    }
-    return (double)(X - M);
+static inline double pay16(int o, _Float16 K, _Float16 A) {
+    (void)o;
+    _Float16 v = A - K;
+    return (double)(v > (_Float16)0.0f ? v : (_Float16)0.0f);
 }
 
 } // namespace scalar

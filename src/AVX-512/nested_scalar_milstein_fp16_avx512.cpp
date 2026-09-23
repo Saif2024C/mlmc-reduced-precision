@@ -1,8 +1,8 @@
 /*
  * nested_scalar_milstein_fp16_avx512.cpp -- unified AVX-512 scalar fp16
- * template.  1-asset GBM; option 1 = Asian, 2 = Lookback.
+ * template.  1-asset GBM; option 1 = Asian.
  *
- * Path state (X, Asian running sum A, Lookback minimum M, payoff) is ALL
+ * Path state (X, Asian running sum A, payoff) is ALL
  * __m256h -- genuine 16-wide fp16 arithmetic, not fp32 with narrowed storage.
  *
  * Per-path maths lives in options_mm512.h, shared with the basket template
@@ -12,7 +12,7 @@
  * block, per-block accumulators reduced into sums[].  No separate _omp file.
  *
  * Build/run:  make nsh_avx  (add -qopenmp -> nsh_omp);  see src/AVX-512/Makefile.
- * Writes nested_scalar_fp16_avx512_{nokahan,kahan,adaptive}_{1,2}.txt to cwd.
+ * Writes nested_scalar_fp16_avx512_{nokahan,kahan,adaptive}_1.txt to cwd.
  *
  *==========================================================================
  * 1. MATHEMATICAL OBJECTIVE
@@ -22,16 +22,14 @@
  *
  *       dS = r S dt + sigma S dW ,        S(0) = S0 = K
  *
- * and the two payoffs priced are
+ * and the payoff priced is
  *
  *   option 1, ASIAN call:      P = e^{-rT} max( Abar - K , 0 ),
  *                              Abar = (1/T) int_0^T S(t) dt
  *
- *   option 2, LOOKBACK call:   P = e^{-rT} ( S(T) - min_{0<=t<=T} S(t) )
- *
- * Both are path-DEPENDENT: the payoff needs the whole trajectory, not just
- * S(T), which is why the state carries a running time-integral A and a
- * running minimum M alongside the path position X.
+ * It is path-DEPENDENT: the payoff needs the whole trajectory, not just
+ * S(T), which is why the state carries a running time-integral A alongside
+ * the path position X.
  *
  * ---- Discretisation ----
  * MILSTEIN, step h:
@@ -51,15 +49,6 @@
  *
  * with a final -(h/2) X_T applied at the end so the sum telescopes to the
  * trapezoid  A = sum h (X_n + X_{n+1})/2  plus the bridge terms.
- *
- * M (Lookback) uses the exact Brownian-bridge minimum over each step: given
- * the endpoints X_n, X_{n+1} and a log-uniform L = log U < 0,
- *
- *   m_n = (1/2)[ X_n + X_{n+1} - sqrt( (X_{n+1}-X_n)^2 - 2 h (sigma X_n)^2 L ) ]
- *   M   = min(M, m_n)
- *
- * which is unbiased for the continuous minimum of the bridged path and is
- * what preserves the fine/coarse coupling for the lookback payoff.
  *
  * ---- The NESTED (super-level) MLMC telescoping sum ----
  * The estimator index l runs over SUPER-levels; k = l/2 is the grid level,
@@ -101,7 +90,7 @@
 
 namespace S = opt::scalar;   // per-path maths: options_mm512.h
 
-int option;                                   // 1 = Asian, 2 = Lookback
+int option;                                   // 1 = Asian
 // K = strike AND S(0) (at-the-money); T = maturity; r = risk-free rate (drift
 // and discount); sig = sigma, the GBM volatility.
 static const float K = 100.0f, T = 1.0f, r = 0.05f, sig = 0.2f;
@@ -120,11 +109,10 @@ int main(int argc, char **argv)
     cfg.prefix      = "nested_scalar_fp16_avx512";
     cfg.family      = "scalar";
     cfg.opt_name[0] = "Asian";
-    cfg.opt_name[1] = "Lookback";
+    cfg.n_opt       = 1;   // Asian only
     cfg.estimator   = nested_scalar_fp16_avx_l;
     cfg.eps         = EPS;
     cfg.l_star[1]   = 5;   // Asian
-    cfg.l_star[2]   = 7;   // Lookback
     return run_sweep(cfg, argc, argv);
 }
 
@@ -137,15 +125,15 @@ typedef S::C16 FC16;
 static inline FC32 make_fc32(float h)    { return S::make32(r, sig, h); }
 static inline FC16 make_fc16(_Float16 h) { return S::make16(r, sig, h); }
 
-// mil_incr32/16 and minbr32/16 are used unwrapped as S::mil_incr32 etc --
+// mil_incr32/16 are used unwrapped as S::mil_incr32 etc --
 // a forwarder here would duplicate the header's signature exactly (FC32 is
 // S::C32), making every call site ambiguous by ADL.
 
-static inline double pay32(int opt, float A, float X, float M) {
-    return S::pay32(opt, K, A, X, M);
+static inline double pay32(int opt, float A) {
+    return S::pay32(opt, K, A);
 }
-static inline double pay16(int opt, _Float16 A, _Float16 X, _Float16 M) {
-    return S::pay16(opt, (_Float16)K, A, X, M);
+static inline double pay16(int opt, _Float16 A) {
+    return S::pay16(opt, (_Float16)K, A);
 }
 
 // kahan_mode picks the compensated or plain accumulator.
@@ -181,9 +169,8 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
 
     const int opt = option;
 
-    // Adaptive cutoff, k >= l_star: pure fp32.  Odd levels run the fp32 chain
-    // twice on the same draws -- a self-consistency check, not a real gap.
-    
+    // Adaptive cutoff, k >= l_star: pure fp32, standard non-nested MLMC.
+
     if (adaptive_mode && k >= l_star) {
         // Above the cutoff the path is FP32 throughout, so the scheme is
         // standard non-nested MLMC: one correction P_k - P_{k-1} per grid
@@ -212,15 +199,13 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             if (l == 0) {
                 __m512 dW  = _mm512_mul_ps(cf32.sqhf, normal16_fp32(g));
                 __m512 dI  = _mm512_mul_ps(vsi32, normal16_fp32(g));
-                __m512 Lrv = loguniform16_fp32(g);
                 __m512 X0  = vK32, v = _mm512_mul_ps(vSig32, X0);
                 __m512 Xf  = _mm512_add_ps(X0, S::mil_incr32(X0, dW, cf32));
                 __m512 Af  = _mm512_add_ps(_mm512_mul_ps(_mm512_mul_ps(vHalf32,vHf32), _mm512_add_ps(X0,Xf)),
                                             _mm512_mul_ps(v, dI));
-                __m512 Mf  = S::minbr32(vK32, X0, Xf, v, Lrv, cf32);
-                alignas(64) float Aa[16], Xa[16], Ma[16];
-                _mm512_store_ps(Aa, Af); _mm512_store_ps(Xa, Xf); _mm512_store_ps(Ma, Mf);
-                for (int j = 0; j < nb; ++j) { double P = disc_f*pay32(opt,Aa[j],Xa[j],Ma[j]); accum(P,P,(double)nf); }
+                alignas(64) float Aa[16];
+                _mm512_store_ps(Aa, Af);
+                for (int j = 0; j < nb; ++j) { double P = disc_f*pay32(opt,Aa[j]); accum(P,P,(double)nf); }
                 mom.flush(sums);
                 continue;
             }
@@ -229,7 +214,6 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 __m512 Xf=vK32, Xc=vK32;
                 __m512 Af=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHf32,vK32));
                 __m512 Ac=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHc32,vK32));
-                __m512 Mf=vK32, Mc=vK32;
 
                 for (int n = 0; n < nc; ++n) {
                     S::Pair32 d;
@@ -237,23 +221,20 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                     d.dW1 = _mm512_mul_ps(cf32.sqhf, normal16_fp32(g));
                     d.dI0 = _mm512_mul_ps(vsi32, normal16_fp32(g));
                     d.dI1 = _mm512_mul_ps(vsi32, normal16_fp32(g));
-                    d.Lrv0 = loguniform16_fp32(g);
-                    d.Lrv1 = loguniform16_fp32(g);
-                    S::step_pair32(Xf, Xc, Af, Ac, Mf, Mc, d,
+                    S::step_pair32(Xf, Xc, Af, Ac, d,
                                    vSig32, vHf32, vHc32, v025hc32, cf32, cc32);
                 }
                 Af=_mm512_sub_ps(Af, _mm512_mul_ps(_mm512_mul_ps(vHalf32,vHf32),Xf));
                 Ac=_mm512_sub_ps(Ac, _mm512_mul_ps(_mm512_mul_ps(vHalf32,vHc32),Xc));
-                alignas(64) float Afa[16],Aca[16],Xfa[16],Xca[16],Mfa[16],Mca[16];
-                _mm512_store_ps(Afa,Af);_mm512_store_ps(Aca,Ac);_mm512_store_ps(Xfa,Xf);
-                _mm512_store_ps(Xca,Xc);_mm512_store_ps(Mfa,Mf);_mm512_store_ps(Mca,Mc);
+                alignas(64) float Afa[16],Aca[16];
+                _mm512_store_ps(Afa,Af);_mm512_store_ps(Aca,Ac);
                 for (int j = 0; j < nb; ++j) {
-                    double Pf=pay32(opt,Afa[j],Xfa[j],Mfa[j]), Pc=pay32(opt,Aca[j],Xca[j],Mca[j]);
+                    double Pf=pay32(opt,Afa[j]), Pc=pay32(opt,Aca[j]);
                     accum(disc_f*(Pf-Pc), disc_f*Pf, (double)nf);
                 }
                 mom.flush(sums);
             } else {
-                // Odd, k>=l_star: fp32 chain twice on the same draws.  Per-lane
+                // Odd, k>=l_star (unreachable: returned empty above).  Per-lane
                 // payoffs are kept side by side so each lane contributes its own diff.
                 alignas(64) float Pf_run[2][16], Pc_run[2][16];
                 for (int run = 0; run < 2; ++run) {
@@ -266,26 +247,22 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                     __m512 Xf=vK32, Xc=vK32;
                     __m512 Af=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHf32,vK32));
                     __m512 Ac=_mm512_mul_ps(vHalf32,_mm512_mul_ps(vHc32,vK32));
-                    __m512 Mf=vK32, Mc=vK32;
                     for (int n = 0; n < nc; ++n) {
                         S::Pair32 d;
                         d.dW0 = _mm512_mul_ps(cf32.sqhf, normal16_fp32(g));
                         d.dW1 = _mm512_mul_ps(cf32.sqhf, normal16_fp32(g));
                         d.dI0 = _mm512_mul_ps(vsi32, normal16_fp32(g));
                         d.dI1 = _mm512_mul_ps(vsi32, normal16_fp32(g));
-                        d.Lrv0 = loguniform16_fp32(g);
-                        d.Lrv1 = loguniform16_fp32(g);
-                        S::step_pair32(Xf, Xc, Af, Ac, Mf, Mc, d,
+                        S::step_pair32(Xf, Xc, Af, Ac, d,
                                        vSig32, vHf32, vHc32, v025hc32, cf32, cc32);
                     }
                     Af=_mm512_sub_ps(Af, _mm512_mul_ps(_mm512_mul_ps(vHalf32,vHf32),Xf));
                     Ac=_mm512_sub_ps(Ac, _mm512_mul_ps(_mm512_mul_ps(vHalf32,vHc32),Xc));
-                    alignas(64) float Afa[16],Aca[16],Xfa[16],Xca[16],Mfa[16],Mca[16];
-                    _mm512_store_ps(Afa,Af);_mm512_store_ps(Aca,Ac);_mm512_store_ps(Xfa,Xf);
-                    _mm512_store_ps(Xca,Xc);_mm512_store_ps(Mfa,Mf);_mm512_store_ps(Mca,Mc);
+                    alignas(64) float Afa[16],Aca[16];
+                    _mm512_store_ps(Afa,Af);_mm512_store_ps(Aca,Ac);
                     for (int j = 0; j < nb; ++j) {
-                        Pf_run[run][j] = (float)pay32(opt,Afa[j],Xfa[j],Mfa[j]);
-                        Pc_run[run][j] = (float)pay32(opt,Aca[j],Xca[j],Mca[j]);
+                        Pf_run[run][j] = (float)pay32(opt,Afa[j]);
+                        Pc_run[run][j] = (float)pay32(opt,Aca[j]);
                     }
                 }
                 for (int j = 0; j < nb; ++j) {
@@ -327,8 +304,6 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             __m256h dW  = _mm256_mul_ph(_mm256_set1_ph((_Float16)sqrtf(hf_f)), normal16_fp16(g));
             // dI ~ N(0,h^3/12): the Asian time-integral bridge draw
             __m256h dI  = _mm256_mul_ph(_mm256_set1_ph((_Float16)si_f), normal16_fp16(g));
-            // L = log U < 0: drives the exact Brownian-bridge minimum
-            __m256h Lrv = narrow16(loguniform16_fp32(g));
 
             // X(0) = K;  v = sigma X, the local diffusion coefficient
             __m256h X0 = vK16, v = _mm256_mul_ph(vSig16, X0);
@@ -338,14 +313,12 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             // plus the bridge correction (sigma X0) dI
             __m256h Af = _mm256_add_ph(_mm256_mul_ph(_mm256_mul_ph(vHalf16,vHf16), _mm256_add_ph(X0,Xf)),
                                         _mm256_mul_ph(v, dI));
-            // Running minimum: min(X0, bridge minimum over [0,T])
-            __m256h Mf = S::minbr16(vK16, X0, Xf, v, Lrv, cf16);
 
-            alignas(64) _Float16 Aa[16], Xa[16], Ma[16];
-            _mm256_store_ph(Aa, Af); _mm256_store_ph(Xa, Xf); _mm256_store_ph(Ma, Mf);
+            alignas(64) _Float16 Aa[16];
+            _mm256_store_ph(Aa, Af);
             for (int j = 0; j < nb; ++j) {
-                // P = e^{-rT} max(A-K,0)  (Asian)  or  e^{-rT}(X_T - M)  (Lookback)
-                double P = (double)disc_h * pay16(opt, Aa[j], Xa[j], Ma[j]);
+                // P = e^{-rT} max(A-K,0)  (Asian)
+                double P = (double)disc_h * pay16(opt, Aa[j]);
                 // Level 0: Y = P itself; cost = n_f timesteps
                 accum(P, P, (double)nf);
             }
@@ -355,26 +328,22 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
         // an O(fp16 eps) quantity with correspondingly tiny variance.
         } else if (l == 1) {
             // fp32/fp16 Normals independently transformed from the same Philox
-            // bits (normal16_coupled), not narrowed one from the other.  The
-            // log-uniform term has no fp16 spline, so it stays fp32-generated.
+            // bits (normal16_coupled), not narrowed one from the other.
             __m512 zW_f32, zI_f32; __m256h zW_f16, zI_f16;
             normal16_coupled(g, zW_f32, zW_f16);
             normal16_coupled(g, zI_f32, zI_f16);
             __m512 dW_f32  = _mm512_mul_ps(_mm512_set1_ps(sqrtf(hf_f)), zW_f32);
             __m512 dI_f32  = _mm512_mul_ps(_mm512_set1_ps(si_f), zI_f32);
-            __m512 Lrv_f32 = loguniform16_fp32(g);
 
             __m256h dW  = _mm256_mul_ph(_mm256_set1_ph((_Float16)sqrtf(hf_f)),
                                          zW_f16);
             __m256h dI  = _mm256_mul_ph(_mm256_set1_ph((_Float16)si_f),
                                          zI_f16);
-            __m256h Lrv = narrow16(Lrv_f32);
 
             __m256h X0h = vK16, vh = _mm256_mul_ph(vSig16, X0h);
             __m256h Xfh = _mm256_add_ph(X0h, S::mil_incr16(X0h, dW, cf16));
             __m256h Afh = _mm256_add_ph(_mm256_mul_ph(_mm256_mul_ph(vHalf16,vHf16), _mm256_add_ph(X0h,Xfh)),
                                          _mm256_mul_ph(vh, dI));
-            __m256h Mfh = S::minbr16(vK16, X0h, Xfh, vh, Lrv, cf16);
 
             // fp32 reference chain: unchanged, pure fp32.
             const FC32 cf32 = make_fc32(hf_f);
@@ -383,16 +352,15 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             __m512 Aff = _mm512_add_ps(_mm512_mul_ps(_mm512_mul_ps(_mm512_set1_ps(0.5f),_mm512_set1_ps(hf_f)),
                                                        _mm512_add_ps(X0f,Xff)),
                                         _mm512_mul_ps(vf, dI_f32));
-            __m512 Mff = S::minbr32(_mm512_set1_ps(K), X0f, Xff, vf, Lrv_f32, cf32);
 
-            alignas(64) _Float16 Aah[16], Xah[16], Mah[16];
-            alignas(64) float    Aaf[16], Xaf[16], Maf[16];
-            _mm256_store_ph(Aah, Afh); _mm256_store_ph(Xah, Xfh); _mm256_store_ph(Mah, Mfh);
-            _mm512_store_ps(Aaf, Aff); _mm512_store_ps(Xaf, Xff); _mm512_store_ps(Maf, Mff);
+            alignas(64) _Float16 Aah[16];
+            alignas(64) float    Aaf[16];
+            _mm256_store_ph(Aah, Afh);
+            _mm512_store_ps(Aaf, Aff);
             for (int j = 0; j < nb; ++j) {
                 // The same payoff, evaluated in each precision on the same draws
-                double dP_h = (double)disc_h * pay16(opt, Aah[j], Xah[j], Mah[j]);
-                double dP_f = (double)disc_f * pay32(opt, Aaf[j], Xaf[j], Maf[j]);
+                double dP_h = (double)disc_h * pay16(opt, Aah[j]);
+                double dP_f = (double)disc_f * pay32(opt, Aaf[j]);
                 // Y_1 = P^{f32} - P^{fp16}: the precision correction
                 double dP   = dP_f - dP_h;
                 // Cost 2*n_f: both chains are simulated on this level
@@ -410,8 +378,6 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             // (h/2)X(0); the matching -(h/2)X(T) is subtracted after the loop
             __m256h Af = _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHf16, vK16));
             __m256h Ac = _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHc16, vK16));
-            // Running minima start at X(0)
-            __m256h Mf = vK16, Mc = vK16;
             // Kahan compensation terms for the four running fp16 accumulators
             __m256h Xf_c = _mm256_setzero_ph(), Xc_c = _mm256_setzero_ph();
             __m256h Af_c = _mm256_setzero_ph(), Ac_c = _mm256_setzero_ph();
@@ -426,17 +392,13 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 // Asian bridge draws dI ~ N(0, h_f^3/12), one per fine step
                 __m256h dI0 = _mm256_mul_ph(_mm256_set1_ph((_Float16)si_f), normal16_fp16(g));
                 __m256h dI1 = _mm256_mul_ph(_mm256_set1_ph((_Float16)si_f), normal16_fp16(g));
-                // log-uniforms for the two fine-step bridge minima
-                __m256h Lrv0 = narrow16(loguniform16_fp32(g));
-                __m256h Lrv1 = narrow16(loguniform16_fp32(g));
 
                 // Advance both paths one coarse step: two fine Milstein steps
                 // (dW0, then dW1) and one coarse Milstein step (dW0+dW1),
-                // updating X, the Asian sum A and the running minimum M for
-                // each.  All state updates route through kahan_accum16.
+                // updating X and the Asian sum A for each.  All state updates
+                // route through kahan_accum16.
                 S::Pair16 d; d.dW0=dW0; d.dW1=dW1; d.dI0=dI0; d.dI1=dI1;
-                d.Lrv0=Lrv0; d.Lrv1=Lrv1;
-                S::step_pair16(Xf, Xc, Af, Ac, Mf, Mc, Xf_c, Xc_c, Af_c, Ac_c,
+                S::step_pair16(Xf, Xc, Af, Ac, Xf_c, Xc_c, Af_c, Ac_c,
                                d, kahan_accum16,
                                vSig16, vHf16, vHc16, v025hc16, cf16, cc16);
             }
@@ -446,14 +408,12 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             __m256h Aft = _mm256_sub_ph(Af, _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHf16, Xf)));
             __m256h Act = _mm256_sub_ph(Ac, _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHc16, Xc)));
 
-            alignas(64) _Float16 Aa[16], Aca[16], Xa[16], Xca[16], Ma[16], Mca[16];
+            alignas(64) _Float16 Aa[16], Aca[16];
             _mm256_store_ph(Aa, Aft); _mm256_store_ph(Aca, Act);
-            _mm256_store_ph(Xa, Xf);  _mm256_store_ph(Xca, Xc);
-            _mm256_store_ph(Ma, Mf);  _mm256_store_ph(Mca, Mc);
             for (int j = 0; j < nb; ++j) {
                 // Fine and coarse payoffs from the same driving randomness
-                double Pf  = pay16(opt, Aa[j], Xa[j], Ma[j]);
-                double Pc  = pay16(opt, Aca[j], Xca[j], Mca[j]);
+                double Pf  = pay16(opt, Aa[j]);
+                double Pc  = pay16(opt, Aca[j]);
                 // Y_l = e^{-rT}(P_f - P_c): the MLMC Milstein correction
                 double dP  = (double)disc_h * (Pf - Pc);
                 // P_f alone, for the telescoping-sum consistency check
@@ -474,14 +434,12 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             __m256h Xf_h = vK16, Xc_h = vK16;
             __m256h Af_h = _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHf16, vK16));
             __m256h Ac_h = _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHc16, vK16));
-            __m256h Mf_h = vK16, Mc_h = vK16;
             __m256h Xf_hc = _mm256_setzero_ph(), Xc_hc = _mm256_setzero_ph();
             __m256h Af_hc = _mm256_setzero_ph(), Ac_hc = _mm256_setzero_ph();
 
             __m512 Xf_f = vK32, Xc_f = vK32;
             __m512 Af_f = _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHf32, vK32));
             __m512 Ac_f = _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHc32, vK32));
-            __m512 Mf_f = vK32, Mc_f = vK32;
 
             for (int n = 0; n < nc; ++n) {
                 // fp32 and fp16 Normals: independently transformed from the
@@ -498,27 +456,22 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 __m512 dW1_f32 = _mm512_mul_ps(_mm512_set1_ps(sqrtf(hf_f)), zW1_f32);
                 __m512 dI0_f32 = _mm512_mul_ps(_mm512_set1_ps(si_f), zI0_f32);
                 __m512 dI1_f32 = _mm512_mul_ps(_mm512_set1_ps(si_f), zI1_f32);
-                __m512 Lrv0_f32 = loguniform16_fp32(g);
-                __m512 Lrv1_f32 = loguniform16_fp32(g);
 
                 // fp16 draws: norminv_fp16 on the same bits as the fp32 draws
-                // above, not a narrow of dW*_f32.  Log-uniform term stays fp32.
+                // above, not a narrow of dW*_f32.
                 __m256h vsqhf16 = _mm256_set1_ph((_Float16)sqrtf(hf_f));
                 __m256h vsi16h  = _mm256_set1_ph((_Float16)si_f);
                 __m256h dW0 = _mm256_mul_ph(vsqhf16, zW0_f16);
                 __m256h dW1 = _mm256_mul_ph(vsqhf16, zW1_f16);
                 __m256h dI0 = _mm256_mul_ph(vsi16h,  zI0_f16);
                 __m256h dI1 = _mm256_mul_ph(vsi16h,  zI1_f16);
-                __m256h Lrv0 = narrow16(Lrv0_f32), Lrv1 = narrow16(Lrv1_f32);
-                __m256h dWc = _mm256_add_ph(dW0, dW1), ddW = _mm256_sub_ph(dW0, dW1);
 
                 // fp16 chain: the whole coupled pair in one call (same body as
                 // the even-level branch).  The fp32 reference chain below is
                 // interleaved with it and driven by the same coupled draws.
                 {
                     S::Pair16 dh; dh.dW0=dW0; dh.dW1=dW1; dh.dI0=dI0; dh.dI1=dI1;
-                    dh.Lrv0=Lrv0; dh.Lrv1=Lrv1;
-                    S::step_pair16(Xf_h, Xc_h, Af_h, Ac_h, Mf_h, Mc_h,
+                    S::step_pair16(Xf_h, Xc_h, Af_h, Ac_h,
                                    Xf_hc, Xc_hc, Af_hc, Ac_hc, dh, kahan_accum16,
                                    vSig16, vHf16, vHc16, v025hc16, cf16, cc16);
                 }
@@ -527,13 +480,11 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 __m512 X0a_f = Xf_f, v0_f = _mm512_mul_ps(vSig32, X0a_f);
                 Xf_f = _mm512_add_ps(X0a_f, S::mil_incr32(X0a_f, dW0_f32, cf32));
                 Af_f = _mm512_add_ps(Af_f, _mm512_add_ps(_mm512_mul_ps(vHf32,Xf_f), _mm512_mul_ps(v0_f,dI0_f32)));
-                Mf_f = S::minbr32(Mf_f, X0a_f, Xf_f, v0_f, Lrv0_f32, cf32);
 
                 // ---- fp32 fine step 1 (unchanged reference) ----
                 __m512 X0b_f = Xf_f, v1_f = _mm512_mul_ps(vSig32, X0b_f);
                 Xf_f = _mm512_add_ps(X0b_f, S::mil_incr32(X0b_f, dW1_f32, cf32));
                 Af_f = _mm512_add_ps(Af_f, _mm512_add_ps(_mm512_mul_ps(vHf32,Xf_f), _mm512_mul_ps(v1_f,dI1_f32)));
-                Mf_f = S::minbr32(Mf_f, X0b_f, Xf_f, v1_f, Lrv1_f32, cf32);
 
                 // ---- fp32 coarse step (unchanged reference) ----
                 __m512 Xc0_f = Xc_f, vc_f = _mm512_mul_ps(vSig32, Xc0_f);
@@ -541,9 +492,6 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
                 Xc_f = _mm512_add_ps(Xc0_f, S::mil_incr32(Xc0_f, dWc_f32, cc32));
                 __m512 cb_f = _mm512_add_ps(_mm512_add_ps(dI0_f32,dI1_f32), _mm512_mul_ps(v025hc32, ddW_f32));
                 Ac_f = _mm512_add_ps(Ac_f, _mm512_add_ps(_mm512_mul_ps(vHc32,Xc_f), _mm512_mul_ps(vc_f,cb_f)));
-                __m512 Xc1_f = _mm512_mul_ps(vHalf32, _mm512_add_ps(_mm512_add_ps(Xc0_f,Xc_f), _mm512_mul_ps(vc_f,ddW_f32)));
-                Mc_f = S::minbr32(Mc_f, Xc0_f, Xc1_f, vc_f, Lrv0_f32, cf32);
-                Mc_f = S::minbr32(Mc_f, Xc1_f, Xc_f,  vc_f, Lrv1_f32, cf32);
             }
 
             __m256h Af_ht = _mm256_sub_ph(Af_h, _mm256_mul_ph(vHalf16, _mm256_mul_ph(vHf16, Xf_h)));
@@ -551,21 +499,17 @@ void nested_scalar_fp16_avx_l(int l, int N, double *sums)
             __m512  Af_ft = _mm512_sub_ps(Af_f, _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHf32, Xf_f)));
             __m512  Ac_ft = _mm512_sub_ps(Ac_f, _mm512_mul_ps(vHalf32, _mm512_mul_ps(vHc32, Xc_f)));
 
-            alignas(64) _Float16 Ahf[16], Ahc[16], Xhf[16], Xhc[16], Mhf[16], Mhc[16];
-            alignas(64) float    Aff[16], Afc[16], Xff[16], Xfc[16], Mff[16], Mfc[16];
+            alignas(64) _Float16 Ahf[16], Ahc[16];
+            alignas(64) float    Aff[16], Afc[16];
             _mm256_store_ph(Ahf, Af_ht); _mm256_store_ph(Ahc, Ac_ht);
-            _mm256_store_ph(Xhf, Xf_h);  _mm256_store_ph(Xhc, Xc_h);
-            _mm256_store_ph(Mhf, Mf_h);  _mm256_store_ph(Mhc, Mc_h);
             _mm512_store_ps(Aff, Af_ft); _mm512_store_ps(Afc, Ac_ft);
-            _mm512_store_ps(Xff, Xf_f);  _mm512_store_ps(Xfc, Xc_f);
-            _mm512_store_ps(Mff, Mf_f);  _mm512_store_ps(Mfc, Mc_f);
 
             for (int j = 0; j < nb; ++j) {
                 // Four payoffs: {fine, coarse} x {fp16, fp32}
-                double Ph_fine = pay16(opt, Ahf[j], Xhf[j], Mhf[j]);
-                double Ph_cors = pay16(opt, Ahc[j], Xhc[j], Mhc[j]);
-                double Pf_fine = pay32(opt, Aff[j], Xff[j], Mff[j]);
-                double Pf_cors = pay32(opt, Afc[j], Xfc[j], Mfc[j]);
+                double Ph_fine = pay16(opt, Ahf[j]);
+                double Ph_cors = pay16(opt, Ahc[j]);
+                double Pf_fine = pay32(opt, Aff[j]);
+                double Pf_cors = pay32(opt, Afc[j]);
 
                 // The MLMC correction as each precision computes it
                 double dP_h = (double)disc_h * (Ph_fine - Ph_cors);

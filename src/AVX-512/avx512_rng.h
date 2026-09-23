@@ -198,7 +198,7 @@ static inline __m512 normal16_fp32(avx_rng &g) {
     return normal16_fp32_bits(philox_next(g));
 }
 
-// 16 exponential-ish RVs in fp32 for the Lookback minimum bridge.
+// 16 exponential-ish RVs in fp32 (log-uniform bridge draws).
 // Returns Lrv = log(U), U~Uniform(0,1)  (i.e. Lrv = -Exp(1), matching the
 // scalar reference's Lrv = -next_exponential()).
 static inline __m512 loguniform16_fp32(avx_rng &g) {

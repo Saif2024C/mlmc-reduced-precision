@@ -13,7 +13,7 @@
 # invoking a per-mode binary.
 #
 # --option N (1 or 2) restricts a run to one payoff. Use it for any timing:
-# scalar Asian/Lookback and basket European/Asian do NOT cost the same per
+# scalar Asian and basket European/Asian do NOT cost the same per
 # sample (different l_star, different N_l), so a combined time averages two
 # different things together.
 #
@@ -53,7 +53,7 @@ endif
 DEPS := avx512_rng.h my_mm512.h options_mm512.h modes_mm512.h
 
 # OPTION selects the payoff for run/scaling/speedup/compare targets:
-#   scalar: 1=Asian, 2=Lookback   |   basket: 1=European, 2=Asian
+#   scalar: 1=Asian   |   basket: 1=European, 2=Asian
 # Leave unset to run/scale/compare both options (the binaries' own default).
 OPTION ?=
 OPTARG := $(if $(OPTION),--option $(OPTION),)

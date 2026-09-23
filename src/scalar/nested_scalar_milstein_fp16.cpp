@@ -14,8 +14,8 @@
  *              l_star (per-option, chosen from where THIS file's own nokahan
  *              data starts to climb -- see l_star_by_option below): even
  *              levels run pure fp32 (no fp16 at all) instead of the fp16
- *              chain; odd levels run the fp32 chain twice on the same draws
- *              as a genuine fp32-self-consistency check. Real complexity
+ *              chain; odd levels are returned empty, so above the cutoff the
+ *              scheme is standard non-nested fp32 MLMC. Real complexity
  *              test. Gives beta close to the theoretical 2 (dominated by the
  *              clean pure-fp32 levels above cutoff) -- see CLAUDE.md.
  *
@@ -30,18 +30,18 @@
  *       src/scalar/nested_scalar_milstein_fp16.cpp \
  *       -o build/nested_scalar_milstein_fp16_O3
  *
- * Run (writes nested_scalar_fp16_{nokahan,kahan,adaptive}_{1,2}.txt/
+ * Run (writes nested_scalar_fp16_{nokahan,kahan,adaptive}_1.txt/
  * _diag.txt/_dbg.txt into the current directory -- run from outputs/ so
- * they land there; each sweep runs both options, ~a few minutes at -O3):
+ * they land there; ~a few minutes at -O3):
  *   cd outputs && ../build/nested_scalar_milstein_fp16_O3
  *
  * Plot (3x2 layout when the complexity-test section has rows -- kahan and
  * adaptive pass a populated Eps array so it does; nokahan passes a zero-
  * terminated Eps array, so the section header prints but stays empty -- 2x2
  * otherwise):
- *   for f in nested_scalar_fp16_nokahan_1  nested_scalar_fp16_nokahan_2 \
- *            nested_scalar_fp16_kahan_1    nested_scalar_fp16_kahan_2   \
- *            nested_scalar_fp16_adaptive_1 nested_scalar_fp16_adaptive_2; do
+ *   for f in nested_scalar_fp16_nokahan_1 \
+ *            nested_scalar_fp16_kahan_1   \
+ *            nested_scalar_fp16_adaptive_1; do
  *     MPLBACKEND=Agg python3 python/nested_mlmc_plot_python.py outputs/$f
  *   done
  *
@@ -66,7 +66,7 @@
 
 using half = _Float16;
 
-// 1 = Asian call, 2 = Lookback call
+// 1 = Asian call
 int option;
 
 // Per-level diagnostic file (point 3): mean(Y), var(Y), mean(Pf) per level,
@@ -84,20 +84,19 @@ void nested_scalar_fp16_l(int, int, double *);
 static bool kahan_mode = false;
 
 // Runtime Adaptive on/off switch: at/above grid level l_star, even levels run
-// the pure-fp32 chain instead of the fp16 chain, and odd levels run the fp32
-// chain twice (same draws) as a genuine fp32-self-consistency check, instead
+// the pure-fp32 chain instead of the fp16 chain, and odd levels are returned
+// empty (standard non-nested fp32 MLMC there), instead
 // of the fp16-vs-fp32 precision correction. Below l_star: unchanged (today's
 // fp16 chain, still gated by kahan_mode). l_star is picked per payoff from
 // where THIS file's own no-Kahan data starts to degrade (see CLAUDE.md):
 // Asian's variance climbs steadily from k=4 and jumps hard at k=8-9, so
-// l_star=7 keeps the last clean level; Lookback's climb starts earlier and
-// more gradually, so l_star=5 is used there. Only ever run paired with
+// l_star=7 keeps the last clean level. Only ever run paired with
 // kahan_mode=true in main() -- kahan_mode=false already showed complexity-
 // test hangs even without adaptive, so there is no combination worth testing
 // where adaptive helps a scheme that hangs below l_star anyway.
 static bool adaptive_mode = false;
 static int  l_star = 0;
-static const int l_star_by_option[] = {0, 7, 5};  // index by option 1/2
+static const int l_star_by_option[] = {0, 7};  // index by option 1
 
 int main(int argc, char **argv)
 {
@@ -121,7 +120,7 @@ int main(int argc, char **argv)
         kahan_mode    = kahan_modes[m];
         adaptive_mode = adapt_modes[m];
 
-        for (option = 1; option <= 2; ++option) {
+        for (option = 1; option <= 1; ++option) {
             l_star = l_star_by_option[option];
             rng_initialisation();
 
@@ -139,7 +138,7 @@ int main(int argc, char **argv)
             if (!dbgfp) { std::perror("fopen"); return EXIT_FAILURE; }
 
             std::printf("\n ---- Nested scalar fp16/fp32 %s (Milstein, bracketed, %s%s) ----\n",
-                        option == 1 ? "Asian" : "Lookback",
+                        "Asian",
                         kahan_mode ? "Kahan ON (fp16+fp32)" : "Kahan OFF",
                         adaptive_mode ? ", Adaptive l_star" : "");
             if (adaptive_mode) std::printf("      l_star = %d\n", l_star);
@@ -201,20 +200,6 @@ static inline void kahan_accum(float &sum, float &comp, float term) {
     sum     = t;
 }
 
-/* Lookback minimum bridge, fp16 throughout (bracketed, no Kahan). */
-static inline half minbridge_bracketed(half X0, half X1, half v, half Lrv, half h)
-{
-    half dX     = X1 - X0;
-    half dX2    = dX * dX;
-    half twoh   = (half)2.0f16 * h;
-    half v2     = v * v;
-    half arg    = dX2 - twoh * v2 * Lrv;
-    half argc   = arg < (half)0.0f16 ? (half)0.0f16 : arg;
-    half sq     = (half)sqrtf((float)argc);
-    half sum01  = X0 + X1;
-    half br     = (half)0.5f16 * (sum01 - sq);
-    return br;
-}
 
 /* ------------------------------------------------------------------
  * nested_scalar_fp16_l: level estimator for fp16/fp32 nested MLMC.
@@ -256,10 +241,8 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
     // Adaptive cutoff: at/above grid level l_star, skip the fp16 chain
     // entirely. Even levels run the standard pure-fp32 Milstein MLMC
     // correction (no fp16 involved at all -- the whole point of the cutoff).
-    // Odd levels run the SAME fp32 chain twice on the same draws, so
-    // sums[1..4] measure genuine fp32-self-consistency noise (not a real
-    // fp16-vs-fp32 gap, since there's no fp16 chain up here to have one
-    // against) instead of returning a hardcoded zero.
+    // Odd levels have no precision correction to carry up here, since there is
+    // no fp16 chain to differ from, so they are returned empty.
     // ----------------------------------------------------------------------
     if (adaptive_mode && k >= l_star) {
         // Above the cutoff the path is FP32 throughout, so the scheme is
@@ -276,25 +259,20 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
 
             if (l == 0) {
                 float dW  = sqrtf(hf_f) * next_normal();
-                float Lrv = -next_exponential();
                 float dI  = sqrtf(hf_f / 12.0f) * hf_f * next_normal();
                 float Xf0 = K_f, vf = sig_f * Xf0;
                 float Xf  = Xf0 + r_f*Xf0*hf_f + sig_f*Xf0*dW
                             + 0.5f*sig_f*sig_f*Xf0*(dW*dW - hf_f);
                 float Af  = 0.5f*hf_f*Xf0 + 0.5f*hf_f*Xf + vf*dI;
-                float Mf  = std::fminf(Xf0, 0.5f*(Xf0+Xf - sqrtf((Xf-Xf0)*(Xf-Xf0)
-                                                                    - 2.0f*hf_f*vf*vf*Lrv)));
-                float Pf  = (option==1) ? std::fmaxf(0.0f,Af-K_f) : (Xf-Mf);
+                float Pf  = std::fmaxf(0.0f,Af-K_f);
                 dP = disc_f * Pf; Pfv = dP;
 
             } else if (l % 2 == 0) {
                 float Xf=K_f, Xc=K_f;
                 float Af=0.5f*hf_f*K_f, Ac=0.5f*hc_f*K_f;
-                float Mf=K_f, Mc=K_f;
 
                 for (int n = 0; n < nc; ++n) {
                     float dW0  = sqrtf(hf_f)*next_normal(), dW1 = sqrtf(hf_f)*next_normal();
-                    float Lrv0 = -next_exponential(),       Lrv1= -next_exponential();
                     float dI0  = sqrtf(hf_f/12.0f)*hf_f*next_normal();
                     float dI1  = sqrtf(hf_f/12.0f)*hf_f*next_normal();
                     float dWc  = dW0+dW1, ddW = dW0-dW1;
@@ -302,36 +280,29 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                     float Xf0a=Xf, vf0=sig_f*Xf0a;
                     Xf  = Xf0a+r_f*Xf0a*hf_f+sig_f*Xf0a*dW0+0.5f*sig_f*sig_f*Xf0a*(dW0*dW0-hf_f);
                     Af += hf_f*Xf+vf0*dI0;
-                    Mf  = std::fminf(Mf,0.5f*(Xf0a+Xf-sqrtf((Xf-Xf0a)*(Xf-Xf0a)-2.0f*hf_f*vf0*vf0*Lrv0)));
 
                     float Xf0b=Xf, vf1=sig_f*Xf0b;
                     Xf  = Xf0b+r_f*Xf0b*hf_f+sig_f*Xf0b*dW1+0.5f*sig_f*sig_f*Xf0b*(dW1*dW1-hf_f);
                     Af += hf_f*Xf+vf1*dI1;
-                    Mf  = std::fminf(Mf,0.5f*(Xf0b+Xf-sqrtf((Xf-Xf0b)*(Xf-Xf0b)-2.0f*hf_f*vf1*vf1*Lrv1)));
 
                     float Xc0=Xc, vc=sig_f*Xc0;
                     Xc  = Xc0+r_f*Xc0*hc_f+sig_f*Xc0*dWc+0.5f*sig_f*sig_f*Xc0*(dWc*dWc-hc_f);
                     Ac += hc_f*Xc+vc*(dI0+dI1+0.25f*hc_f*ddW);
-                    float Xc1=0.5f*(Xc0+Xc+vc*ddW);
-                    Mc  = std::fminf(Mc,0.5f*(Xc0+Xc1-sqrtf((Xc1-Xc0)*(Xc1-Xc0)-2.0f*hf_f*vc*vc*Lrv0)));
-                    Mc  = std::fminf(Mc,0.5f*(Xc1+Xc -sqrtf((Xc-Xc1) *(Xc-Xc1) -2.0f*hf_f*vc*vc*Lrv1)));
                 }
                 Af -= 0.5f*hf_f*Xf; Ac -= 0.5f*hc_f*Xc;
-                float Pf=(option==1)?std::fmaxf(0.0f,Af-K_f):(Xf-Mf);
-                float Pc=(option==1)?std::fmaxf(0.0f,Ac-K_f):(Xc-Mc);
+                float Pf=std::fmaxf(0.0f,Af-K_f);
+                float Pc=std::fmaxf(0.0f,Ac-K_f);
                 dP = disc_f*(Pf-Pc); Pfv = disc_f*Pf;
 
             } else {
                 // Odd, k>=l_star: run the pure-fp32 chain TWICE on the same
-                // draws (fp32-self-consistency check, not a real fp16 gap).
+                // draws.
                 float dP_runs[2], Pfv_runs[2];
                 for (int run = 0; run < 2; ++run) {
                     float Xf=K_f, Xc=K_f;
                     float Af=0.5f*hf_f*K_f, Ac=0.5f*hc_f*K_f;
-                    float Mf=K_f, Mc=K_f;
                     for (int n = 0; n < nc; ++n) {
                         float dW0  = sqrtf(hf_f)*next_normal(), dW1 = sqrtf(hf_f)*next_normal();
-                        float Lrv0 = -next_exponential(),       Lrv1= -next_exponential();
                         float dI0  = sqrtf(hf_f/12.0f)*hf_f*next_normal();
                         float dI1  = sqrtf(hf_f/12.0f)*hf_f*next_normal();
                         float dWc  = dW0+dW1, ddW = dW0-dW1;
@@ -339,23 +310,18 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                         float Xf0a=Xf, vf0=sig_f*Xf0a;
                         Xf  = Xf0a+r_f*Xf0a*hf_f+sig_f*Xf0a*dW0+0.5f*sig_f*sig_f*Xf0a*(dW0*dW0-hf_f);
                         Af += hf_f*Xf+vf0*dI0;
-                        Mf  = std::fminf(Mf,0.5f*(Xf0a+Xf-sqrtf((Xf-Xf0a)*(Xf-Xf0a)-2.0f*hf_f*vf0*vf0*Lrv0)));
 
                         float Xf0b=Xf, vf1=sig_f*Xf0b;
                         Xf  = Xf0b+r_f*Xf0b*hf_f+sig_f*Xf0b*dW1+0.5f*sig_f*sig_f*Xf0b*(dW1*dW1-hf_f);
                         Af += hf_f*Xf+vf1*dI1;
-                        Mf  = std::fminf(Mf,0.5f*(Xf0b+Xf-sqrtf((Xf-Xf0b)*(Xf-Xf0b)-2.0f*hf_f*vf1*vf1*Lrv1)));
 
                         float Xc0=Xc, vc=sig_f*Xc0;
                         Xc  = Xc0+r_f*Xc0*hc_f+sig_f*Xc0*dWc+0.5f*sig_f*sig_f*Xc0*(dWc*dWc-hc_f);
                         Ac += hc_f*Xc+vc*(dI0+dI1+0.25f*hc_f*ddW);
-                        float Xc1=0.5f*(Xc0+Xc+vc*ddW);
-                        Mc  = std::fminf(Mc,0.5f*(Xc0+Xc1-sqrtf((Xc1-Xc0)*(Xc1-Xc0)-2.0f*hf_f*vc*vc*Lrv0)));
-                        Mc  = std::fminf(Mc,0.5f*(Xc1+Xc -sqrtf((Xc-Xc1) *(Xc-Xc1) -2.0f*hf_f*vc*vc*Lrv1)));
                     }
                     Af -= 0.5f*hf_f*Xf; Ac -= 0.5f*hc_f*Xc;
-                    float Pf=(option==1)?std::fmaxf(0.0f,Af-K_f):(Xf-Mf);
-                    float Pc=(option==1)?std::fmaxf(0.0f,Ac-K_f):(Xc-Mc);
+                    float Pf=std::fmaxf(0.0f,Af-K_f);
+                    float Pc=std::fmaxf(0.0f,Ac-K_f);
                     dP_runs[run]  = disc_f*(Pf-Pc);
                     Pfv_runs[run] = disc_f*Pf;
                 }
@@ -390,7 +356,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
         if (l == 0) {
             // Point 4: draw fp32, narrow to fp16 IMMEDIATELY, before any use.
             half dW  = (half)(sqrtf(hf_f) * next_normal());
-            half Lrv = (half)(-next_exponential());
             half dI  = (half)(sqrtf(hf_f / 12.0f) * hf_f * next_normal());
 
             half Xf0 = K_h;
@@ -407,12 +372,8 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             half Xf  = Xf0 + outer_1;
 
             half Af  = halfhf * Xf0 + halfhf * Xf + vf * dI;
-            half br  = minbridge_bracketed(Xf0, Xf, vf, Lrv, hf_h);
-            half Mf  = Xf0 < br ? Xf0 : br;
 
-            half Pf_h = (option == 1)
-                ? (Af - K_h > (half)0.0f16 ? Af - K_h : (half)0.0f16)
-                : (Xf - Mf);
+            half Pf_h = (Af - K_h > (half)0.0f16 ? Af - K_h : (half)0.0f16);
             half dP_h = disc_h * Pf_h;
             double dP = (double)dP_h;
 
@@ -431,13 +392,11 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
         // ----------------------------------------------------------------
         } else if (l == 1) {
             float dW_f  = sqrtf(hf_f) * next_normal();
-            float Lrv_f = -next_exponential();
             float dI_f  = sqrtf(hf_f / 12.0f) * hf_f * next_normal();
 
             // fp16 chain: narrow the SAME draw immediately (point 4),
             // isolating pure fp16 arithmetic error from the fp32 reference.
             half dW_h  = (half)dW_f;
-            half Lrv_h = (half)Lrv_f;
             half dI_h  = (half)dI_f;
 
             half Xf0_h = K_h;
@@ -453,11 +412,7 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             half outer_2      = diff_2 + inner_2;
             half Xf_h  = Xf0_h + outer_2;
             half Af_h  = halfhf * Xf0_h + halfhf * Xf_h + vf_h * dI_h;
-            half br_h  = minbridge_bracketed(Xf0_h, Xf_h, vf_h, Lrv_h, hf_h);
-            half Mf_h  = Xf0_h < br_h ? Xf0_h : br_h;
-            half Ph_h  = (option == 1)
-                ? (Af_h - K_h > (half)0.0f16 ? Af_h - K_h : (half)0.0f16)
-                : (Xf_h - Mf_h);
+            half Ph_h  = (Af_h - K_h > (half)0.0f16 ? Af_h - K_h : (half)0.0f16);
             half dPh_h = disc_h * Ph_h;
             double dP_h = (double)dPh_h;
 
@@ -467,11 +422,7 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             float Xf_f  = Xf0_f + r_f*Xf0_f*hf_f + sig_f*Xf0_f*dW_f
                               + 0.5f*sig_f*sig_f*Xf0_f*(dW_f*dW_f - hf_f);
             float Af_f  = 0.5f*hf_f*Xf0_f + 0.5f*hf_f*Xf_f + vf_f*dI_f;
-            float Mf_f  = std::fminf(Xf0_f,
-                              0.5f*(Xf0_f + Xf_f
-                                    - sqrtf((Xf_f-Xf0_f)*(Xf_f-Xf0_f)
-                                            - 2.0f*hf_f*vf_f*vf_f*Lrv_f)));
-            float Pf    = (option == 1) ? std::fmaxf(0.0f, Af_f - K_f) : (Xf_f - Mf_f);
+            float Pf    = std::fmaxf(0.0f, Af_f - K_f);
             double dP_f = disc_f * Pf;
 
             double dP   = dP_f - dP_h;
@@ -491,7 +442,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             half Xf = K_h, Xc = K_h;
             half Af = halfhf * K_h;
             half Ac = halfhc * K_h;
-            half Mf = K_h, Mc = K_h;
             // Kahan compensation state (point: kahan_mode==false degenerates
             // kahan_accum to plain +=, so these are unused/inert in that case).
             half Xf_c = (half)0.0f16, Xc_c = (half)0.0f16;
@@ -501,8 +451,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 // Point 4: narrow immediately after the fp32 draw.
                 half dW0  = (half)(sqrtf(hf_f) * next_normal());
                 half dW1  = (half)(sqrtf(hf_f) * next_normal());
-                half Lrv0 = (half)(-next_exponential());
-                half Lrv1 = (half)(-next_exponential());
                 half dI0  = (half)(sqrtf(hf_f / 12.0f) * hf_f * next_normal());
                 half dI1  = (half)(sqrtf(hf_f / 12.0f) * hf_f * next_normal());
 
@@ -523,8 +471,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half outer_3      = diff_3 + inner_3;
                 kahan_accum(Xf, Xf_c, outer_3);
                 kahan_accum(Af, Af_c, hf_h * Xf + vf0 * dI0);
-                half br0 = minbridge_bracketed(Xf0a, Xf, vf0, Lrv0, hf_h);
-                Mf = Mf < br0 ? Mf : br0;
 
                 // fp16 fine step 1 (bracketed; Kahan-accumulated iff kahan_mode)
                 half Xf0b = Xf;
@@ -540,8 +486,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half outer_4      = diff_4 + inner_4;
                 kahan_accum(Xf, Xf_c, outer_4);
                 kahan_accum(Af, Af_c, hf_h * Xf + vf1 * dI1);
-                half br1 = minbridge_bracketed(Xf0b, Xf, vf1, Lrv1, hf_h);
-                Mf = Mf < br1 ? Mf : br1;
 
                 // fp16 coarse step (driven by dWc = dW0 + dW1, bracketed; Kahan-accumulated iff kahan_mode)
                 half Xc0 = Xc;
@@ -559,23 +503,14 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half quarterhc = (half)0.25f16 * hc_h;
                 half cb  = dI0 + dI1 + quarterhc * ddW;
                 kahan_accum(Ac, Ac_c, hc_h * Xc + vc * cb);
-                half Xc1 = (half)0.5f16 * (Xc0 + Xc + vc * ddW);
 
-                half brc0 = minbridge_bracketed(Xc0, Xc1, vc, Lrv0, hf_h);
-                Mc = Mc < brc0 ? Mc : brc0;
-                half brc1 = minbridge_bracketed(Xc1, Xc, vc, Lrv1, hf_h);
-                Mc = Mc < brc1 ? Mc : brc1;
             }
 
             half Aft = Af - halfhf * Xf;
             half Act = Ac - halfhc * Xc;
 
-            half Pf_h = (option == 1)
-                ? (Aft - K_h > (half)0.0f16 ? Aft - K_h : (half)0.0f16)
-                : (Xf - Mf);
-            half Pc_h = (option == 1)
-                ? (Act - K_h > (half)0.0f16 ? Act - K_h : (half)0.0f16)
-                : (Xc - Mc);
+            half Pf_h = (Aft - K_h > (half)0.0f16 ? Aft - K_h : (half)0.0f16);
+            half Pc_h = (Act - K_h > (half)0.0f16 ? Act - K_h : (half)0.0f16);
 
             half dY_h  = Pf_h - Pc_h;
             half dP_h  = disc_h * dY_h;
@@ -599,11 +534,9 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             half  Xf_h  = K_h, Xc_h  = K_h;
             half  Af_h  = halfhf * K_h;
             half  Ac_h  = halfhc * K_h;
-            half  Mf_h  = K_h, Mc_h  = K_h;
             float Xf_f  = K_f, Xc_f  = K_f;
             float Af_f  = 0.5f*hf_f*K_f;
             float Ac_f  = 0.5f*hc_f*K_f;
-            float Mf_f  = K_f, Mc_f  = K_f;
             // Kahan compensation state, fp16 and fp32 chains (inert when
             // kahan_mode==false -- kahan_accum then just does plain +=).
             half  Xf_hc = (half)0.0f16,  Xc_hc = (half)0.0f16;
@@ -614,15 +547,12 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             for (int n = 0; n < nc; ++n) {
                 float dW0_f  = sqrtf(hf_f) * next_normal();
                 float dW1_f  = sqrtf(hf_f) * next_normal();
-                float Lrv0_f = -next_exponential();
-                float Lrv1_f = -next_exponential();
                 float dI0_f  = sqrtf(hf_f / 12.0f) * hf_f * next_normal();
                 float dI1_f  = sqrtf(hf_f / 12.0f) * hf_f * next_normal();
 
                 // fp16 chain draws: narrow the SAME fp32 draws immediately
                 // (point 4), isolating pure fp16 arithmetic error.
                 half dW0  = (half)dW0_f, dW1  = (half)dW1_f;
-                half Lrv0 = (half)Lrv0_f, Lrv1 = (half)Lrv1_f;
                 half dI0  = (half)dI0_f, dI1  = (half)dI1_f;
                 half dWc  = dW0 + dW1, ddW = dW0 - dW1;
 
@@ -640,8 +570,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half outer_6      = diff_6 + inner_6;
                 kahan_accum(Xf_h, Xf_hc, outer_6);
                 kahan_accum(Af_h, Af_hc, hf_h * Xf_h + vf0_h * dI0);
-                half br0_h = minbridge_bracketed(Xf0a_h, Xf_h, vf0_h, Lrv0, hf_h);
-                Mf_h = Mf_h < br0_h ? Mf_h : br0_h;
 
                 // ---- fp32 fine step 0 (same Kahan on/off switch as fp16) ----
                 float Xf0a_f = Xf_f;
@@ -650,10 +578,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                        + 0.5f*sig_f*sig_f*Xf0a_f*(dW0_f*dW0_f - hf_f);
                 kahan_accum(Xf_f, Xf_fc, incr0_f);
                 kahan_accum(Af_f, Af_fc, hf_f*Xf_f + vf0_f*dI0_f);
-                Mf_f  = std::fminf(Mf_f,
-                            0.5f*(Xf0a_f + Xf_f
-                                  - sqrtf((Xf_f-Xf0a_f)*(Xf_f-Xf0a_f)
-                                          - 2.0f*hf_f*vf0_f*vf0_f*Lrv0_f)));
 
                 // ---- fp16 fine step 1 (bracketed, no Kahan) ----
                 half Xf0b_h = Xf_h;
@@ -669,8 +593,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half outer_7      = diff_7 + inner_7;
                 kahan_accum(Xf_h, Xf_hc, outer_7);
                 kahan_accum(Af_h, Af_hc, hf_h * Xf_h + vf1_h * dI1);
-                half br1_h = minbridge_bracketed(Xf0b_h, Xf_h, vf1_h, Lrv1, hf_h);
-                Mf_h = Mf_h < br1_h ? Mf_h : br1_h;
 
                 // ---- fp32 fine step 1 (same Kahan on/off switch as fp16) ----
                 float Xf0b_f = Xf_f;
@@ -679,10 +601,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                        + 0.5f*sig_f*sig_f*Xf0b_f*(dW1_f*dW1_f - hf_f);
                 kahan_accum(Xf_f, Xf_fc, incr1_f);
                 kahan_accum(Af_f, Af_fc, hf_f*Xf_f + vf1_f*dI1_f);
-                Mf_f  = std::fminf(Mf_f,
-                            0.5f*(Xf0b_f + Xf_f
-                                  - sqrtf((Xf_f-Xf0b_f)*(Xf_f-Xf0b_f)
-                                          - 2.0f*hf_f*vf1_f*vf1_f*Lrv1_f)));
 
                 // ---- fp16 coarse step (bracketed, no Kahan) ----
                 half Xc0_h = Xc_h;
@@ -700,11 +618,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                 half quarterhc_h = (half)0.25f16 * hc_h;
                 half cb_h  = dI0 + dI1 + quarterhc_h * ddW;
                 kahan_accum(Ac_h, Ac_hc, hc_h * Xc_h + vc_h * cb_h);
-                half Xc1_h = (half)0.5f16 * (Xc0_h + Xc_h + vc_h * ddW);
-                half brc0_h = minbridge_bracketed(Xc0_h, Xc1_h, vc_h, Lrv0, hf_h);
-                Mc_h = Mc_h < brc0_h ? Mc_h : brc0_h;
-                half brc1_h = minbridge_bracketed(Xc1_h, Xc_h, vc_h, Lrv1, hf_h);
-                Mc_h = Mc_h < brc1_h ? Mc_h : brc1_h;
 
                 // ---- fp32 coarse step (same Kahan on/off switch as fp16) ----
                 float Xc0_f = Xc_f;
@@ -714,15 +627,6 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
                        + 0.5f*sig_f*sig_f*Xc0_f*(dWc_f*dWc_f - hc_f);
                 kahan_accum(Xc_f, Xc_fc, incrc_f);
                 kahan_accum(Ac_f, Ac_fc, hc_f*Xc_f + vc_f*(dI0_f + dI1_f + 0.25f*hc_f*ddW_f));
-                float Xc1_f = 0.5f*(Xc0_f + Xc_f + vc_f*ddW_f);
-                Mc_f  = std::fminf(Mc_f,
-                            0.5f*(Xc0_f + Xc1_f
-                                  - sqrtf((Xc1_f-Xc0_f)*(Xc1_f-Xc0_f)
-                                          - 2.0f*hf_f*vc_f*vc_f*Lrv0_f)));
-                Mc_f  = std::fminf(Mc_f,
-                            0.5f*(Xc1_f + Xc_f
-                                  - sqrtf((Xc_f-Xc1_f)*(Xc_f-Xc1_f)
-                                          - 2.0f*hf_f*vc_f*vc_f*Lrv1_f)));
             }
 
             half  Af_ht = Af_h - halfhf * Xf_h;
@@ -730,14 +634,10 @@ void nested_scalar_fp16_l(int l, int N, double *sums)
             float Af_ft = Af_f - 0.5f*hf_f*Xf_f;
             float Ac_ft = Ac_f - 0.5f*hc_f*Xc_f;
 
-            half  Ph_fine_h = (option==1)
-                ? (Af_ht - K_h > (half)0.0f16 ? Af_ht - K_h : (half)0.0f16)
-                : (Xf_h - Mf_h);
-            half  Ph_cors_h = (option==1)
-                ? (Ac_ht - K_h > (half)0.0f16 ? Ac_ht - K_h : (half)0.0f16)
-                : (Xc_h - Mc_h);
-            float Pf_fine = (option==1)?std::fmaxf(0.0f,Af_ft-K_f):(Xf_f-Mf_f);
-            float Pf_cors = (option==1)?std::fmaxf(0.0f,Ac_ft-K_f):(Xc_f-Mc_f);
+            half  Ph_fine_h = (Af_ht - K_h > (half)0.0f16 ? Af_ht - K_h : (half)0.0f16);
+            half  Ph_cors_h = (Ac_ht - K_h > (half)0.0f16 ? Ac_ht - K_h : (half)0.0f16);
+            float Pf_fine = std::fmaxf(0.0f,Af_ft-K_f);
+            float Pf_cors = std::fmaxf(0.0f,Ac_ft-K_f);
 
             half   dYh_h = Ph_fine_h - Ph_cors_h;
             half   dPh_h = disc_h * dYh_h;

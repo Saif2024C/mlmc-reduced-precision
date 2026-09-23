@@ -29,7 +29,7 @@ top-level `.cpp` includes the files below it, so only that file is compiled.
 
 ```bash
 mkdir -p build
-g++ -O2 -std=c++11 src/scalar/asian_lookback_scalar.cpp -o build/asian_lookback_scalar
+g++ -O2 -std=c++11 src/scalar/asian_scalar.cpp          -o build/asian_scalar
 g++ -O2 -std=c++11 src/basket/basket_scalar.cpp          -o build/basket_scalar
 ```
 

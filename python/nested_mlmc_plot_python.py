@@ -26,7 +26,7 @@ import matplotlib.ticker as ticker
 # Human-readable label for a nested-MLMC output basename.
 #
 # Filename conventions covered:
-#   nested_scalar_<mode>_[omp_]<opt>            (scalar: 1=Asian, 2=Lookback)
+#   nested_scalar_<mode>_[omp_]<opt>            (scalar: 1=Asian)
 #   nested_basket_<mode>_[omp_]<opt>            (basket: 1=European, 2=Asian)
 #   nested_scalar_fp16_kahan_avx512_<opt>       (AVX-512 serial)
 #   nested_scalar_fp16_kahan_omp_avx512_<opt>   (AVX-512 + OpenMP)
@@ -34,7 +34,6 @@ import matplotlib.ticker as ticker
 
 _PAYOFF_NAMES = {
     ("scalar", "1"): "Scalar Asian Call",
-    ("scalar", "2"): "Scalar Lookback Call",
     ("basket", "1"): "Basket European Call",
     ("basket", "2"): "Basket Asian Call",
 }

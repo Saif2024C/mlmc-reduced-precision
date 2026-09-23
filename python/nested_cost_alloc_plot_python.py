@@ -114,7 +114,7 @@ def main():
         sys.exit(1)
 
     payoff = {"basket": {"1": "European", "2": "Asian"},
-              "scalar": {"1": "Asian",    "2": "Lookback"}}[domain][opt]
+              "scalar": {"1": "Asian"}}[domain][opt]
 
     # ---------------------------------------------------------------- (1)
     fig, ax = plt.subplots(figsize=(7.2, 5.0))

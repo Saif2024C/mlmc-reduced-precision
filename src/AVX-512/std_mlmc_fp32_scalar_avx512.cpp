@@ -75,8 +75,7 @@ int main(int argc, char **argv)
         FILE *fp = std::fopen(filename, "w");
         if (!fp) { std::perror("fopen"); return EXIT_FAILURE; }
 
-        std::printf("\n ---- standard fp32 MLMC, scalar %s (AVX-512) ----\n",
-                    option == 1 ? "Asian" : "Lookback");
+        std::printf("\n ---- standard fp32 MLMC, scalar Asian (AVX-512) ----\n");
 
         float e[16];
         int n = 0;

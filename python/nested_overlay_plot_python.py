@@ -33,7 +33,7 @@ Usage:
 
     <dir>     directory holding the four nested_<domain>_fp16_avx512_<mode>_<opt>.txt
     <domain>  scalar | basket
-    <opt>     1 | 2   (scalar: 1=Asian 2=Lookback; basket: 1=European 2=Asian)
+    <opt>     1 | 2   (scalar: 1=Asian; basket: 1=European 2=Asian)
     [k_star]  cutoff level for the dotted line; default 5 scalar-1 / 6 otherwise
 
 Writes <dir>/nested_<domain>_fp16_avx512_overlay5_<opt>.png
@@ -94,7 +94,7 @@ mpl.rcParams.update({
 DEFAULT_KSTAR = {("scalar", 1): 5, ("scalar", 2): 6,
                  ("basket", 1): 6, ("basket", 2): 6}
 
-PAYOFF_NAME = {("scalar", 1): "Scalar Asian",     ("scalar", 2): "Scalar Lookback",
+PAYOFF_NAME = {("scalar", 1): "Scalar Asian",
                ("basket", 1): "Basket European",  ("basket", 2): "Basket Asian"}
 
 

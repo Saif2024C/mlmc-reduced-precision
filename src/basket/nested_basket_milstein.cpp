@@ -15,7 +15,7 @@
  *       * Odd levels: cost counted, correction = 0 (replaced by fp64-vs-fp64 check)
  *     - Per-option cutoffs: l_star = 6 for both options (not yet independently
  *       tuned from basket's own fp32-vs-fp64 divergence data, unlike scalar's
- *       Asian=5/Lookback=6 which were picked from that file's own climb --
+ *       Asian=5 which was picked from that file's own climb --
  *       revisit if a tighter basket-specific cutoff is needed)
  *
  * No Kahan compensation anywhere in this file: fp32 and fp64 do not suffer

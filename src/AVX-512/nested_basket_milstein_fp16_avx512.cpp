@@ -38,7 +38,7 @@
  *
  * European depends only on the terminal basket; Asian is path-dependent and
  * so carries a running time-integral A, exactly as the scalar Asian does.
- * There is no lookback here, hence no bridge minimum M.
+ * There is no bridge minimum M here.
  *
  * ---- Correlation ----
  * Correlated increments come from the Cholesky factor Sigma = L L^T:
@@ -293,7 +293,7 @@ void nested_basket_fp16_avx_l(int l, int N, double *sums)
                 mom.flush(sums);
             } else {
                 // Odd, k>=l_star: pure-fp32 chain run TWICE on the same
-                // draws -- fp32-self-consistency check, not a real fp16 gap.
+                // draws (unreachable: odd levels are returned empty above).
                 alignas(64) float Pf_run[2][16], Pc_run[2][16];
                 for (int run = 0; run < 2; ++run) {
                     // Reseed identically per run: `g` is shared, so without

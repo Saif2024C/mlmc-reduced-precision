@@ -3,7 +3,10 @@
 //
 // Performance_analysis.txt item 1b.  Third kernel in the set, after
 // kernel_bench_basket_l0.cpp (1a, basket European) and
-// kernel_bench_scalar_l0.cpp (1d, scalar Lookback).
+// kernel_bench_scalar_l0.cpp (1d, scalar Lookback -- that payoff and its
+// benchmark have since been removed from the project; the Lookback numbers
+// quoted below are retained because they are what this control is measured
+// against).
 //
 //   P = e^{-rT} max(A - K, 0),   A = time-average of the path
 //
@@ -22,13 +25,14 @@
 // Both kernels are lifted VERBATIM from the l==0 branches of
 // nested_scalar_milstein_fp16_avx512.cpp; re-sync if that file changes.
 //
-// ONE DELIBERATE DEVIATION, mirroring the Lookback benchmark.  The shipped
-// l==0 branch serves both scalar payoffs from one code path: it computes the
-// Asian integral Af AND the Lookback minimum Mf unconditionally, then selects
-// in the final pay32()/pay16() call.  There is no `if (opt == ...)` guard, so
-// the shipped Asian path really does compute Mf (and draw its log-uniform) and
-// throw it away.  This benchmark STRIPS Mf and the log-uniform draw, to
-// profile a pure Asian kernel.  Quote it as the cost of the Asian KERNEL, not
+// HISTORICAL NOTE ON ONE DEVIATION.  When this benchmark was written the
+// shipped l==0 branch served both scalar payoffs from one code path: it
+// computed the Asian integral Af AND the Lookback minimum Mf unconditionally,
+// then selected in the final pay32()/pay16() call, so the Asian path really
+// did compute Mf (and draw its log-uniform) and throw it away.  This benchmark
+// STRIPPED Mf and the log-uniform to profile a pure Asian kernel.  Since
+// Lookback was removed the shipped branch no longer computes either, so this
+// benchmark and the estimator now agree and the deviation is moot.  Quote it as the cost of the Asian KERNEL, not
 // of the level-0 estimator call.  Stripping the log-uniform is also what makes
 // this a clean test of the coverage hypothesis: leaving it in would import
 // exactly the fp32 work the comparison is trying to isolate.

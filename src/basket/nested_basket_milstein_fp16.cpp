@@ -21,8 +21,8 @@
  *              l_star (l_star=6 for both options, matching
  *              nested_basket_milstein_adaptive.cpp's existing tuning): even
  *              levels run pure fp32 (no fp16 at all) instead of the fp16
- *              chain; odd levels run the fp32 chain twice on the same draws
- *              as a genuine fp32-self-consistency check. Real complexity
+ *              chain; odd levels are returned empty, so above the cutoff the
+ *              scheme is standard non-nested fp32 MLMC. Real complexity
  *              test. Gives beta close to the theoretical 2 (dominated by the
  *              clean pure-fp32 levels above cutoff) -- see CLAUDE.md.
  *
@@ -82,8 +82,8 @@ void nested_basket_fp16_l(int, int, double *);
 static bool kahan_mode = false;
 
 // Runtime Adaptive on/off switch: at/above grid level l_star, even levels run
-// the pure-fp32 chain instead of the fp16 chain, and odd levels run the fp32
-// chain twice (same draws) as a genuine fp32-self-consistency check. Below
+// the pure-fp32 chain instead of the fp16 chain, and odd levels are returned
+// empty (standard non-nested fp32 MLMC there). Below
 // l_star: unchanged (today's fp16 chain, still gated by kahan_mode). l_star=6
 // for both options here -- matches nested_basket_milstein_adaptive.cpp's
 // existing per-asset cutoff tuning (not re-derived from this file's own
@@ -316,8 +316,8 @@ void nested_basket_fp16_l(int l, int N, double *sums)
     // ----------------------------------------------------------------------
     // Adaptive cutoff: at/above grid level l_star, skip the fp16 chain
     // entirely. Even levels: pure fp32 Milstein MLMC correction. Odd levels:
-    // the SAME fp32 chain twice on the same draws, giving genuine fp32-self-
-    // consistency noise rather than a hardcoded zero (see scalar template).
+    // no precision correction to carry, so they are returned empty -- the
+    // scheme is standard non-nested MLMC above the cutoff.
     // ----------------------------------------------------------------------
     if (adaptive_mode && k >= l_star) {
         // Above the cutoff the path is FP32 throughout, so the scheme is

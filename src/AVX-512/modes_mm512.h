@@ -102,6 +102,7 @@ struct SweepConfig {
     const char *prefix;        // output filename stem
     const char *family;        // "scalar" / "basket" / ... , for the banner
     const char *opt_name[2];   // display names for option 1 and 2
+    int   n_opt;               // payoffs this program has: 1 or 2 (default 2)
     void (*estimator)(int, int, double *);
     const float *eps;          // 0-terminated, used by the kahan/adaptive modes
     int   l_star[3];           // indexed by option (1,2); [0] unused
@@ -113,14 +114,14 @@ struct SweepConfig {
     int Lmin = 2;
     int Lmax = 20;
 
-    SweepConfig() : prefix(""), family(""), estimator(0), eps(0), setup(0) {
+    SweepConfig() : prefix(""), family(""), n_opt(2), estimator(0), eps(0), setup(0) {
         opt_name[0] = "1"; opt_name[1] = "2";
         l_star[0] = l_star[1] = l_star[2] = 0;
     }
 };
 
 // ---------------------------------------------------------------------------
-// run_sweep: 3 modes x 2 options (or one option, with --option N).
+// run_sweep: 3 modes x cfg.n_opt options (or one option, with --option N).
 // Returns EXIT_SUCCESS / EXIT_FAILURE, so main() can `return run_sweep(...)`.
 // ---------------------------------------------------------------------------
 static inline int run_sweep(const SweepConfig &cfg, int argc, char **argv)
@@ -128,8 +129,9 @@ static inline int run_sweep(const SweepConfig &cfg, int argc, char **argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     if (cfg.setup) cfg.setup();
 
-    // --option N restricts the run to a single payoff.
-    int opt_lo = 1, opt_hi = 2;
+    // --option N restricts the run to a single payoff.  A program with only
+    // one payoff (cfg.n_opt == 1) never loops past it.
+    int opt_lo = 1, opt_hi = cfg.n_opt;
     for (int i = 1; i < argc; ++i)
         if (std::strcmp(argv[i], "--option") == 0 && i + 1 < argc)
             opt_lo = opt_hi = std::atoi(argv[++i]);

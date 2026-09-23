@@ -4,7 +4,7 @@ benchmarks (src/AVX-512/performance_analysis/).
 
 Serves both kernels, which share one --scaling output format:
     outputs/avx512/kernel/basket/basket_l0_scaling_sweep.txt   (basket European)
-    outputs/avx512/kernel/scalar/scalar_l0_scaling_sweep.txt   (scalar Lookback)
+    outputs/avx512/kernel/scalar/scalar_asian_l0_scaling_sweep.txt (scalar Asian)
 The figure title is derived from the input filename, so neither needs a flag.
 
 Input is the output of `make kbench_scaling`, whose wall-clock block is keyed
@@ -143,13 +143,11 @@ def main():
     base = path.rsplit(".", 1)[0]
     XLABEL = "$N_0$  (level-0 paths requested by the MLMC driver)"
     # Derived from the input filename, not hardcoded: this script serves both
-    # the basket European and scalar Lookback kernel benchmarks, whose
+    # the basket European and scalar Asian kernel benchmarks, whose
     # --scaling output shares one format.
     _name = base.rsplit("/", 1)[-1]
-    if "asian" in _name:
+    if "scalar" in _name or "asian" in _name:
         TITLE = "Level-0 scalar Asian kernel"
-    elif "scalar" in _name:
-        TITLE = "Level-0 scalar Lookback kernel"
     elif "basket" in _name:
         TITLE = "Level-0 basket European kernel"
     else:
