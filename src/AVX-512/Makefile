@@ -208,6 +208,73 @@ L1-dcache-loads,L1-dcache-stores \
 	  ./kb_basket_l0 --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
 	} | tee $(OUT)/kernel/basket_l0_nonmem_$(KERNEL).txt
 
+# OpenMP counters (Giles, 2026-09-23): "have you tried using perf with OpenMP
+# multi-threaded applications?".  Same three passes and the same event set as
+# kbench_perf, but on the -qopenmp binary under OMP_NUM_THREADS, so the serial
+# and threaded numbers are directly comparable row for row.
+#
+# perf stat follows the whole process tree, so the counts it reports are summed
+# over ALL threads, not per thread.  Two consequences when reading the output:
+#   * `instructions` and the fp_arith_* events should be essentially UNCHANGED
+#     from the 1-thread run -- the same total work is divided between threads,
+#     not duplicated.  A rise means the parallel build is doing extra work
+#     (per-thread setup, a different code path); a fall means threads are
+#     idling in the timed region.
+#   * `task-clock` is CPU-time summed over threads, so it scales UP with the
+#     thread count while elapsed time falls.  IPC stays honest (both numerator
+#     and denominator are process-wide totals), but "cycles" is no longer a
+#     wall-clock proxy -- read the elapsed line for that.
+# OMP_PLACES/OMP_PROC_BIND pin threads as in kbench_scaling, so the counts are
+# not polluted by migration.
+#
+# make kbench_perf_omp KERNEL=fp16 OMPTHREADS=32
+OMPTHREADS ?= 32
+kbench_perf_omp: kb_basket_l0_omp
+	@mkdir -p $(OUT)/kernel
+	@{ echo "=== OpenMP counters: $(OMPTHREADS) threads, kernel $(KERNEL) ==="; \
+	echo "=== pass 1: SIMD / instruction mix ==="; \
+	OMP_NUM_THREADS=$(OMPTHREADS) OMP_PLACES=cores OMP_PROC_BIND=close \
+	perf stat -e task-clock,cycles,instructions,\
+fp_arith_inst_retired.512b_packed_single,fp_arith_inst_retired.256b_packed_single,\
+fp_arith_inst_retired2.512b_packed_half,fp_arith_inst_retired2.256b_packed_half \
+	  ./kb_basket_l0_omp --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
+	echo; echo "=== pass 2: L1 / L2 ==="; \
+	OMP_NUM_THREADS=$(OMPTHREADS) OMP_PLACES=cores OMP_PROC_BIND=close \
+	perf stat -e task-clock,cycles,instructions,\
+L1-dcache-loads,L1-dcache-load-misses,l2_rqsts.miss \
+	  ./kb_basket_l0_omp --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
+	echo; echo "=== pass 3: stores / non-memory ==="; \
+	OMP_NUM_THREADS=$(OMPTHREADS) OMP_PLACES=cores OMP_PROC_BIND=close \
+	perf stat -e task-clock,cycles,instructions,\
+mem_inst_retired.all_loads,mem_inst_retired.all_stores,\
+L1-dcache-stores,resource_stalls.sb \
+	  ./kb_basket_l0_omp --kernel $(KERNEL) $(if $(NPATHS),--n $(NPATHS),) 2>&1; \
+	} | tee $(OUT)/kernel/basket_l0_perf_omp$(OMPTHREADS)_$(KERNEL).txt
+
+# Per-thread counters (Giles, 2026-09-23): shows that the fixed total work is
+# DIVIDED between threads rather than duplicated.  perf's --per-thread mode only
+# works when attaching to an existing process (-p), not when perf launches the
+# workload itself, so the binary is started in the background with enough reps
+# to outlive the attach, and perf is pointed at its pid.
+#
+# NOT -A: that is per-CPU and requires system-wide mode, which would also count
+# every other user's work on this shared node.
+#
+# PERTHREAD_REPS is deliberately large: the attach costs a few hundred ms, so a
+# short run would be over before perf starts counting.
+PERTHREAD_REPS ?= 200
+kbench_perf_omp_percpu: kb_basket_l0_omp
+	@mkdir -p $(OUT)/kernel
+	@{ echo "=== per-thread breakdown: $(OMPTHREADS) threads, kernel $(KERNEL) ==="; \
+	echo "=== (counts are per OpenMP thread; sum = process total) ==="; \
+	OMP_NUM_THREADS=$(OMPTHREADS) OMP_PLACES=cores OMP_PROC_BIND=close \
+	  ./kb_basket_l0_omp --kernel $(KERNEL) --reps $(PERTHREAD_REPS) \
+	  $(if $(NPATHS),--n $(NPATHS),) & \
+	pid=$$!; sleep 1; \
+	perf stat --per-thread -e cycles,instructions -p $$pid 2>&1; \
+	wait $$pid; \
+	} | tee $(OUT)/kernel/basket_l0_perthread_omp$(OMPTHREADS)_$(KERNEL).txt
+
 # VTune uarch-exploration for one kernel (richer than perf: port utilisation,
 # retiring/bad-spec/backend breakdown).
 kbench_vtune: kb_basket_l0
@@ -399,4 +466,5 @@ L1-dcache-loads,L1-dcache-stores \
 	 } | tee $(OUT)/kernel/$(BENCH)_allcounters.txt
 
 .PHONY: all omp everything mkl run run_omp scaling scaling_csv speedup push pull kpull clean \
-        kbench kbench_perf kbench_vtune kbench_scaling kbench_allcounters coupling_test
+        kbench kbench_perf kbench_perf_omp kbench_perf_omp_percpu kbench_vtune \
+        kbench_scaling kbench_allcounters coupling_test

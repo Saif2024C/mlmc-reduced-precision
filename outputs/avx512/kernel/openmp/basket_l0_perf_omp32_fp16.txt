@@ -1,0 +1,74 @@
+=== OpenMP counters: 32 threads, kernel fp16 ===
+=== pass 1: SIMD / instruction mix ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 32 (OpenMP)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best   4.5359 ms    1.08 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0_omp --kernel fp16':
+
+            923.40 msec task-clock                       #   10.614 CPUs utilized             
+       739,261,753      cycles                           #    0.801 GHz                       
+     1,049,115,431      instructions                     #    1.42  insn per cycle            
+                 0      fp_arith_inst_retired.512b_packed_single #    0.000 /sec                      
+                 0      fp_arith_inst_retired.256b_packed_single #    0.000 /sec                      
+        32,870,400      fp_arith_inst_retired2.512b_packed_half #   35.597 M/sec                     
+       101,240,832      fp_arith_inst_retired2.256b_packed_half #  109.639 M/sec                     
+
+       0.086999685 seconds time elapsed
+
+       0.891660000 seconds user
+       0.055602000 seconds sys
+
+
+
+=== pass 2: L1 / L2 ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 32 (OpenMP)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best   4.6029 ms    1.10 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0_omp --kernel fp16':
+
+            910.12 msec task-clock                       #   10.969 CPUs utilized             
+       725,120,192      cycles                           #    0.797 GHz                       
+     1,039,020,840      instructions                     #    1.43  insn per cycle            
+       149,136,617      L1-dcache-loads                  #  163.864 M/sec                     
+           387,388      L1-dcache-load-misses            #    0.26% of all L1-dcache accesses 
+         1,140,637      l2_rqsts.miss                    #    1.253 M/sec                     
+
+       0.082971551 seconds time elapsed
+
+       0.889547000 seconds user
+       0.044527000 seconds sys
+
+
+
+=== pass 3: stores / non-memory ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 32 (OpenMP)
+  reps    = 5 per timing
+
+fp16+Kahan   N = 4194304     best   4.5190 ms    1.08 ns/path  chk 10.948546
+
+ Performance counter stats for './kb_basket_l0_omp --kernel fp16':
+
+            905.57 msec task-clock                       #   10.880 CPUs utilized             
+       726,203,093      cycles                           #    0.802 GHz                       
+     1,039,103,101      instructions                     #    1.43  insn per cycle            
+       149,142,588      mem_inst_retired.all_loads       #  164.695 M/sec                     
+        34,432,931      mem_inst_retired.all_stores      #   38.023 M/sec                     
+        34,432,931      L1-dcache-stores                 #   38.023 M/sec                     
+           982,217      resource_stalls.sb               #    1.085 M/sec                     
+
+       0.083230228 seconds time elapsed
+
+       0.890721000 seconds user
+       0.038771000 seconds sys
+
+

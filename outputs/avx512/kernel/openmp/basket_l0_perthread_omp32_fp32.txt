@@ -1,0 +1,78 @@
+=== per-thread breakdown: 32 threads, kernel fp32 ===
+=== (counts are per OpenMP thread; sum = process total) ===
+Level-0 kernel benchmark -- BASKET EUROPEAN (option 1)
+  RNG -> per-asset Milstein (1 step) -> terminal payoff
+  threads = 32 (OpenMP)
+  reps    = 60 per timing
+
+fp32         N = 67108864    best  60.7958 ms    0.91 ns/path  chk 10.953767
+
+ Performance counter stats for process id '4187556':
+
+ kb_basket_l0_om-4187556      6,042,802,809      cycles                                                                
+   openmp_worker-4187558      6,044,224,956      cycles                                                                
+   openmp_worker-4187559      6,022,797,344      cycles                                                                
+   openmp_worker-4187560      6,023,080,110      cycles                                                                
+   openmp_worker-4187561      6,044,721,030      cycles                                                                
+   openmp_worker-4187562      6,045,243,137      cycles                                                                
+   openmp_worker-4187563      6,044,912,931      cycles                                                                
+   openmp_worker-4187564      6,044,976,443      cycles                                                                
+   openmp_worker-4187565      8,158,543,910      cycles                                                                
+   openmp_worker-4187566      6,045,037,711      cycles                                                                
+   openmp_worker-4187567      6,475,313,630      cycles                                                                
+   openmp_worker-4187568      6,044,935,612      cycles                                                                
+   openmp_worker-4187569      6,044,910,086      cycles                                                                
+   openmp_worker-4187570      6,075,493,255      cycles                                                                
+   openmp_worker-4187571      6,022,969,236      cycles                                                                
+   openmp_worker-4187572      6,044,647,212      cycles                                                                
+   openmp_worker-4187573      6,044,612,740      cycles                                                                
+   openmp_worker-4187574      6,044,661,107      cycles                                                                
+   openmp_worker-4187575      6,044,806,521      cycles                                                                
+   openmp_worker-4187576      6,044,680,177      cycles                                                                
+   openmp_worker-4187577      6,044,689,324      cycles                                                                
+   openmp_worker-4187578      6,044,579,724      cycles                                                                
+   openmp_worker-4187579      6,044,487,995      cycles                                                                
+   openmp_worker-4187580      6,044,414,936      cycles                                                                
+   openmp_worker-4187581      6,044,503,113      cycles                                                                
+   openmp_worker-4187582      6,033,152,609      cycles                                                                
+   openmp_worker-4187583      6,044,414,440      cycles                                                                
+   openmp_worker-4187584      6,022,807,363      cycles                                                                
+   openmp_worker-4187585      6,608,641,087      cycles                                                                
+   openmp_worker-4187586      5,988,462,767      cycles                                                                
+   openmp_worker-4187587      6,044,296,254      cycles                                                                
+   openmp_worker-4187588      6,044,425,358      cycles                                                                
+ kb_basket_l0_om-4187556      9,879,605,311      instructions                     #    1.63  insn per cycle            
+   openmp_worker-4187558      9,847,323,653      instructions                     #    1.63  insn per cycle            
+   openmp_worker-4187559      9,865,851,806      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187560      9,865,618,701      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187561      9,888,355,792      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187562      9,889,486,478      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187563      9,856,972,585      instructions                     #    1.63  insn per cycle            
+   openmp_worker-4187564      9,889,215,671      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187565     12,139,267,138      instructions                     #    1.49  insn per cycle            
+   openmp_worker-4187566      9,889,242,423      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187567     10,346,909,325      instructions                     #    1.60  insn per cycle            
+   openmp_worker-4187568      9,887,994,277      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187569      9,888,516,096      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187570      9,918,192,998      instructions                     #    1.63  insn per cycle            
+   openmp_worker-4187571      9,864,086,498      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187572      9,887,693,618      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187573      9,887,886,753      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187574      9,888,621,824      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187575      9,888,412,953      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187576      9,888,960,675      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187577      9,888,275,592      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187578      9,888,256,970      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187579      9,887,579,049      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187580      9,887,117,082      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187581      9,885,967,638      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187582      9,876,086,389      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187583      9,888,311,912      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187584      9,864,689,651      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187585     10,487,171,735      instructions                     #    1.59  insn per cycle            
+   openmp_worker-4187586      9,828,000,655      instructions                     #    1.64  insn per cycle            
+   openmp_worker-4187587      9,878,545,893      instructions                     #    1.63  insn per cycle            
+   openmp_worker-4187588      9,885,766,661      instructions                     #    1.64  insn per cycle            
+
+       3.003455690 seconds time elapsed
+
