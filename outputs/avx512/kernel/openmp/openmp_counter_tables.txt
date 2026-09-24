@@ -1,9 +1,11 @@
 ================================================================================
-OpenMP hardware counters for the level-0 kernel
+OpenMP multi-threaded hardware counters for the level-0 kernel
 Basket European payoff, AVX-512, Intel Xeon Gold 6538Y+ (mimic)
-Measured 2026-09-23 in reply to two questions from Prof. Giles:
-  (i)  is there variation in the arithmetic instruction counts?
-  (ii) has perf been used with OpenMP multi-threaded applications?
+
+Program: src/AVX-512/performance_analysis/kernel_bench_basket_l0.cpp, built
+twice from that one source -- kb_basket_l0 (serial) and kb_basket_l0_omp (the
+same file with -qopenmp). It profiles the production level-0 kernel in
+isolation, not the MLMC driver.
 ================================================================================
 
 
@@ -13,7 +15,7 @@ Measured 2026-09-23 in reply to two questions from Prof. Giles:
         Cycles                         1 520.1 M  1 720.7 M  1 780.5 M   14.6%
         Elapsed time (s)                  0.565      0.627      0.664    14.8%
 
-Table 1: Three independent passes of the same serial FP32 binary,
+Table 1: Three independent passes of kb_basket_l0 (serial), FP32 kernel,
 N = 4.19 x 10^6. The arithmetic count is exactly reproducible; cycles and
 elapsed time are not. FP-arithmetic is the sum of the 512b and 256b
 packed-single counters. The FP16 kernel behaves the same way: 134.1 M
@@ -27,11 +29,11 @@ cycles by 15.0%.
         512b packed half  (FP16)            32 870 400   32 870 400   identical
         256b packed half  (FP16)           101 240 832  101 240 832   identical
 
-Table 2: Packed floating-point counters, serial build against the -qopenmp
-build at 32 threads, N = 4.19 x 10^6. Every count is bit-identical. The kernel
-performs a fixed amount of arithmetic over a fixed number of paths, and perf
-sums over the whole process tree, so threading divides the work without
-changing the total.
+Table 2: Packed floating-point counters, kb_basket_l0 (serial) against
+kb_basket_l0_omp at 32 threads, N = 4.19 x 10^6. Every count is bit-identical.
+The kernel performs a fixed amount of arithmetic over a fixed number of paths,
+and perf sums over the whole process tree, so threading divides the work
+without changing the total.
 
 
         Quantity                            1 thread   32 threads     Ratio
@@ -47,14 +49,13 @@ changing the total.
         L1 miss rate                           0.20%        0.06%       lower
         L2 misses                              n/a         1.16 M        --
 
-Table 3: Serial against 32-thread FP32, N = 4.19 x 10^6. Threading adds
+Table 3: kb_basket_l0 (serial) against kb_basket_l0_omp at 32 threads,
+FP32 kernel, N = 4.19 x 10^6. Threading adds
 instructions rather than removing them: thread setup, barriers and parallel-loop
 bookkeeping are all retired instructions the serial build never executes. The
 FP-arithmetic counters exclude that overhead, which is why they stay exact while
 the total does not. task-clock is CPU-time summed over threads, so it rises with
-the thread count while elapsed time falls; perf's derived "GHz" figure is
-therefore meaningless in threaded mode (it reported 0.886 GHz against a true
-~2.7 GHz) but IPC stays valid, both terms being process-wide totals.
+the thread count while elapsed time falls.
 
 
         Quantity                                  FP32          FP16
@@ -65,7 +66,8 @@ therefore meaningless in threaded mode (it reported 0.886 GHz against a true
         Maximum per thread                     12 139.3 M     3 026.3 M
         Threads within 2% of median               29 / 32       29 / 32
 
-Table 4: Per-thread breakdown at 32 threads, N = 6.71 x 10^7. The total divided
+Table 4: Per-thread breakdown of kb_basket_l0_omp at 32 threads,
+N = 6.71 x 10^7. The total divided
 by 32 is 9 984.5 M against a median of 9 888.0 M, so the work is split evenly
 between threads and not duplicated; the mean sits just above the median because
 of three outliers, which are elevated in both instructions and cycles while
