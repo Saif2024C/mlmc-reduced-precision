@@ -68,12 +68,32 @@ therefore meaningless in threaded mode (it reported 0.886 GHz against a true
 Table 4: Per-thread breakdown at 32 threads, N = 6.71 x 10^7. The total divided
 by 32 is 9 984.5 M against a median of 9 888.0 M, so the work is split evenly
 between threads and not duplicated; the mean sits just above the median because
-of three outliers. Those outliers are elevated in both instructions and cycles
-while their IPC falls (1.49-1.60 against 1.64 for the rest), which is the
-signature of spin-waiting at a barrier: an idle thread still retires
-instructions while it spins. A larger N is used here than in Tables 1-3
-because perf's --per-thread mode can only attach to a running process, and at
-the smaller N the run finished before the attach completed.
+of three outliers, which are elevated in both instructions and cycles while
+their IPC falls (1.49-1.60 against 1.64 for the rest). That combination is the
+signature of spin-waiting at a barrier.
+
+A barrier is the point at the end of a parallel region where every thread must
+arrive before any may continue, so a thread that finishes its share early has
+to wait for the slowest one. There are two ways to wait. The thread can ask the
+operating system to deschedule it and wake it when the barrier releases, which
+frees the core but costs microseconds in system calls and context switches. Or
+it can spin: sit in a tight loop re-reading the barrier flag until it changes.
+Spinning wastes the core but responds within nanoseconds, so OpenMP runtimes
+spin first and only fall back to descheduling after a delay. The runtime used
+here reports KMP_BLOCKTIME=200ms, so a waiting thread spins for up to 200 ms
+before it yields the core.
+
+The counters see that spin loop as ordinary work, because that is what it is:
+each iteration is a load, a compare and a branch, all retired and all counted.
+A thread that waits therefore accumulates instructions and cycles without
+computing anything, which raises both counts while lowering IPC, since a loop
+gated on one memory location retires fewer instructions per cycle than the
+kernel's vectorised arithmetic does. So the three outliers are not doing extra
+work; they are the threads that arrived early and burned cycles waiting.
+
+A larger N is used here than in Tables 1-3 because perf's --per-thread mode can
+only attach to a running process, and at the smaller N the run finished before
+the attach completed.
 
 
 --------------------------------------------------------------------------------
